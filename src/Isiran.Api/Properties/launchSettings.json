@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Isiran.Api": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:41969;http://localhost:41970"
+    }
+  }
+}
