@@ -8,9 +8,9 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'https://localhost:41969',
+        target: 'https://ipmsbk.coretexia.com',
         changeOrigin: true,
-        secure: false, // Allow self-signed certificates
+        secure: true,
         ws: true, // Enable websocket proxying
       },
     },

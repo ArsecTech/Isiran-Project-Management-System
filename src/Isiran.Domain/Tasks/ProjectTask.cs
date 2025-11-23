@@ -163,6 +163,18 @@ public class ProjectTask : AggregateRoot
         WbsCode = wbsCode;
         UpdateTimestamp();
     }
+
+    public void ChangeParent(Guid? parentTaskId)
+    {
+        // Prevent circular reference: a task cannot be its own parent
+        if (parentTaskId.HasValue && parentTaskId.Value == Id)
+        {
+            throw new InvalidOperationException("A task cannot be its own parent.");
+        }
+
+        ParentTaskId = parentTaskId;
+        UpdateTimestamp();
+    }
 }
 
 public enum TaskType

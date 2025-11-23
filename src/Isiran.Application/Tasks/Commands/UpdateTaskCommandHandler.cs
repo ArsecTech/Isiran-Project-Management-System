@@ -60,6 +60,11 @@ public class UpdateTaskCommandHandler : IRequestHandler<UpdateTaskCommand, Unit>
             task.AssignTo(request.AssignedToId.Value);
         }
 
+        if (request.ParentTaskId != task.ParentTaskId)
+        {
+            task.ChangeParent(request.ParentTaskId);
+        }
+
         await _repository.UpdateAsync(task, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

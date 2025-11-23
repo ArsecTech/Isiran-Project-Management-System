@@ -1,5 +1,5 @@
 import { Globe } from 'lucide-react'
-import { useI18nStore, Language } from '../../store/i18nStore'
+import { useI18nStore } from '../../store/i18nStore'
 
 export default function LanguageSwitcher() {
   const { language, setLanguage } = useI18nStore()

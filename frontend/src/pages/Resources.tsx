@@ -5,7 +5,6 @@ import {
   List,
   Grid,
   Calendar,
-  MoreVertical,
   Edit,
   Trash2,
   User,
@@ -24,7 +23,6 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
-import LoadingSpinner from '../components/ui/LoadingSpinner'
 import Skeleton from '../components/ui/Skeleton'
 import { formatRialSimple } from '../utils/dateUtils'
 import { useI18nStore } from '../store/i18nStore'

@@ -5,6 +5,7 @@ using Isiran.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -79,7 +80,11 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:3000")
+        policy.WithOrigins(
+                "http://localhost:5173", 
+                "http://localhost:3000",
+                "https://ipms.coretexia.com"
+              )
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -92,24 +97,74 @@ builder.Logging.AddDebug();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
+// Global Exception Handler Middleware
+app.Use(async (context, next) =>
 {
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "An unhandled exception occurred: {Message}", ex.Message);
+        
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json";
+        
+        var errorResponse = new
+        {
+            error = "An error occurred while processing your request.",
+            message = app.Environment.IsDevelopment() ? ex.Message : "Internal server error",
+            stackTrace = app.Environment.IsDevelopment() ? ex.StackTrace : null
+        };
+        
+        await context.Response.WriteAsJsonAsync(errorResponse);
+    }
+});
+
+// Configure the HTTP request pipeline
+// if (app.Environment.IsDevelopment())
+// {
     app.UseSwagger();
     app.UseSwaggerUI();
-}
+// }
 
-app.UseHttpsRedirection();
+// CORS must be before UseHttpsRedirection
 app.UseCors("AllowReactApp");
+app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-// Ensure database is created
-using (var scope = app.Services.CreateScope())
+// Ensure database is created (with error handling)
+try
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    dbContext.Database.EnsureCreated();
+    using (var scope = app.Services.CreateScope())
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        
+        logger.LogInformation("Checking database connection...");
+        var canConnect = await dbContext.Database.CanConnectAsync();
+        
+        if (!canConnect)
+        {
+            logger.LogWarning("Cannot connect to database. Attempting to create database...");
+            await dbContext.Database.EnsureCreatedAsync();
+            logger.LogInformation("Database created successfully.");
+        }
+        else
+        {
+            logger.LogInformation("Database connection successful.");
+        }
+    }
+}
+catch (Exception ex)
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogError(ex, "Error during database initialization: {Message}", ex.Message);
+    // Don't throw - let the app start and handle errors at runtime
 }
 
 app.Run();

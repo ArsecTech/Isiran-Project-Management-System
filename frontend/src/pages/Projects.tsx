@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { projectApi } from '../services/api'
 import { Project, PagedResult, ProjectStatus, ProjectPriority } from '../types'
-import { Plus, Search, Filter, MoreVertical, Edit, Trash2 } from 'lucide-react'
+import { Plus, Search, Filter, Edit, Trash2, MoreVertical } from 'lucide-react'
 import { useUIStore } from '../store/uiStore'
 import { useProjectStore } from '../store/projectStore'
 import { useI18nStore } from '../store/i18nStore'
@@ -11,9 +11,7 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
-import LoadingSpinner from '../components/ui/LoadingSpinner'
 import Skeleton from '../components/ui/Skeleton'
-import { formatPersianDate, formatRialSimple } from '../utils/dateUtils'
 import PersianDatePicker from '../components/ui/PersianDatePicker'
 
 export default function Projects() {
@@ -60,7 +58,7 @@ export default function Projects() {
 
   const handleCreateProject = async (data: Partial<Project>) => {
     try {
-      const response = await projectApi.create(data)
+      await projectApi.create(data)
       showToast('پروژه با موفقیت ایجاد شد', 'success')
       setShowCreateModal(false)
       loadProjects()

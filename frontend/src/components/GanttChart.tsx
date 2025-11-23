@@ -27,7 +27,8 @@ interface GanttTask {
 }
 
 interface GanttData {
-  taskSchedules: GanttTask[]
+  taskSchedules: GanttTask[] // Root tasks only (for rendering)
+  allTasks: GanttTask[] // All tasks (for summary cards)
   projectStartDate?: string
   projectEndDate?: string
   totalDuration: number
@@ -56,18 +57,116 @@ export default function GanttChart({ projectId }: GanttChartProps) {
     loadGanttData()
     loadVersions()
   }, [projectId, selectedVersion])
+  
+  // Ensure expandedTasks is set when data changes
+  useEffect(() => {
+    if (data && data.taskSchedules && data.taskSchedules.length > 0) {
+      const collectAllTaskIds = (tasks: GanttTask[], taskIds: Set<string> = new Set()): Set<string> => {
+        tasks.forEach(task => {
+          taskIds.add(task.taskId)
+          if (task.subTasks && task.subTasks.length > 0) {
+            collectAllTaskIds(task.subTasks, taskIds)
+          }
+        })
+        return taskIds
+      }
+      
+      const allTaskIds = collectAllTaskIds(data.taskSchedules)
+      const currentIds = Array.from(expandedTasks).sort()
+      const newIds = Array.from(allTaskIds).sort()
+      const idsMatch = currentIds.length === newIds.length && 
+                       currentIds.every((id, idx) => id === newIds[idx])
+      
+      if (!idsMatch) {
+        console.log('🟦 [Gantt] useEffect: Updating expandedTasks from', expandedTasks.size, 'to', allTaskIds.size)
+        console.log('🟦 [Gantt] Current IDs:', currentIds)
+        console.log('🟦 [Gantt] New IDs:', newIds)
+        setExpandedTasks(allTaskIds)
+      }
+    }
+  }, [data?.taskSchedules]) // Only depend on taskSchedules, not the whole data object
 
   const loadGanttData = async () => {
     try {
       setLoading(true)
       const response = await ganttApi.getSchedule(projectId)
+      console.log('🟦 [Gantt] Raw API response:', JSON.stringify(response.data, null, 2))
+      console.log('🟦 [Gantt] TaskSchedules from API:', response.data.taskSchedules?.length || 0)
+      console.log('🟦 [Gantt] TaskSchedules details:', response.data.taskSchedules?.map((t: any) => ({
+        taskId: t.taskId,
+        taskName: t.taskName,
+        parentTaskId: t.parentTaskId,
+        level: t.level
+      })))
+      
+      const allTasksFlat = (response.data.taskSchedules || []).map((t: any) => ({
+        taskId: t.taskId,
+        taskName: t.taskName || t.name || '',
+        calculatedStartDate: t.calculatedStartDate,
+        calculatedEndDate: t.calculatedEndDate,
+        calculatedDuration: t.calculatedDuration || 0,
+        isOnCriticalPath: t.isOnCriticalPath || false,
+        parentTaskId: t.parentTaskId,
+        level: t.level || 0,
+        subTasks: [],
+        percentComplete: t.percentComplete,
+        status: t.status
+      }))
+      
       const hierarchicalData = buildHierarchicalTasks(response.data.taskSchedules || [])
+      console.log('🟦 [Gantt] After buildHierarchicalTasks:', hierarchicalData.length, 'root tasks')
+      console.log('🟦 [Gantt] Root tasks details:', hierarchicalData.map(t => ({
+        id: t.taskId,
+        name: t.taskName,
+        subTasksCount: t.subTasks?.length || 0,
+        subTaskIds: t.subTasks?.map(st => st.taskId) || [],
+        subTasksDetails: t.subTasks?.map(st => ({
+          id: st.taskId,
+          name: st.taskName,
+          subTasksCount: st.subTasks?.length || 0
+        })) || []
+      })))
+      
+      // Set all tasks as expanded by default (to show full hierarchy)
+      const collectAllTaskIds = (tasks: GanttTask[], taskIds: Set<string> = new Set()): Set<string> => {
+        tasks.forEach(task => {
+          taskIds.add(task.taskId)
+          console.log('🟦 [Gantt] Adding to expanded:', task.taskId, task.taskName, 'hasSubTasks:', task.subTasks?.length || 0)
+          if (task.subTasks && task.subTasks.length > 0) {
+            collectAllTaskIds(task.subTasks, taskIds)
+          }
+        })
+        return taskIds
+      }
+      
+      const allTaskIds = collectAllTaskIds(hierarchicalData)
+      console.log('🟦 [Gantt] Before setExpandedTasks - allTaskIds:', Array.from(allTaskIds))
+      console.log('🟦 [Gantt] Hierarchical data structure:', JSON.stringify(hierarchicalData.map(t => ({
+        id: t.taskId,
+        name: t.taskName,
+        subTasks: t.subTasks?.map(st => ({
+          id: st.taskId,
+          name: st.taskName,
+          subTasks: st.subTasks?.map(sst => ({
+            id: sst.taskId,
+            name: sst.taskName
+          })) || []
+        })) || []
+      })), null, 2))
+      
+      // Set data first
       setData({
         ...response.data,
-        taskSchedules: hierarchicalData
+        taskSchedules: hierarchicalData, // Root tasks only (for rendering)
+        allTasks: allTasksFlat // All tasks (for summary cards)
       })
+      
+      // Then set expanded tasks - ensure it happens after data is set
+      setExpandedTasks(new Set(allTaskIds))
+      console.log('🟦 [Gantt] Set expanded tasks:', allTaskIds.size, 'tasks')
+      console.log('🟦 [Gantt] Expanded task IDs:', Array.from(allTaskIds))
     } catch (error) {
-      console.error('Failed to load Gantt data:', error)
+      console.error('❌ [Gantt] Failed to load Gantt data:', error)
     } finally {
       setLoading(false)
     }
@@ -83,58 +182,219 @@ export default function GanttChart({ projectId }: GanttChartProps) {
   }
 
   const buildHierarchicalTasks = (tasks: any[]): GanttTask[] => {
+    console.log('🔵 [Gantt] buildHierarchicalTasks - START')
+    console.log('🔵 [Gantt] Input tasks count:', tasks?.length || 0)
+    console.log('🔵 [Gantt] Input tasks:', JSON.stringify(tasks, null, 2))
+    
+    if (!tasks || tasks.length === 0) return []
+    
+    // Step 1: Remove duplicate tasks by taskId (keep first occurrence)
+    const uniqueTasks = new Map<string, any>()
+    tasks.forEach(task => {
+      if (task.taskId && !uniqueTasks.has(task.taskId)) {
+        uniqueTasks.set(task.taskId, task)
+      } else if (task.taskId) {
+        console.log('🟡 [Gantt] Duplicate task found in input:', task.taskId, task.taskName)
+      }
+    })
+    const deduplicatedTasks = Array.from(uniqueTasks.values())
+    console.log('🔵 [Gantt] After deduplication:', deduplicatedTasks.length, 'tasks')
+    
     const taskMap = new Map<string, GanttTask>()
     const rootTasks: GanttTask[] = []
+    const childTaskIds = new Set<string>() // Track all tasks that are children
 
-    // First pass: create all tasks with their data
-    tasks.forEach(task => {
+    // Step 2: Create all tasks with their data
+    deduplicatedTasks.forEach(task => {
       taskMap.set(task.taskId, {
-        ...task,
-        level: task.level || 0,
-        subTasks: []
+        taskId: task.taskId,
+        taskName: task.taskName || task.name || '',
+        calculatedStartDate: task.calculatedStartDate,
+        calculatedEndDate: task.calculatedEndDate,
+        calculatedDuration: task.calculatedDuration || 0,
+        isOnCriticalPath: task.isOnCriticalPath || false,
+        parentTaskId: task.parentTaskId,
+        level: 0, // Will be calculated later
+        subTasks: [],
+        percentComplete: task.percentComplete,
+        status: task.status
       })
-    })
-
-    // Second pass: build hierarchy recursively (supports multiple levels)
-    const buildTaskLevel = (taskId: string, parentLevel: number = -1): number => {
-      const task = taskMap.get(taskId)
-      if (!task) return 0
-
-      const currentLevel = parentLevel + 1
-      task.level = currentLevel
-
-      // Find all children of this task
-      const children = tasks.filter(t => t.parentTaskId === taskId)
       
-      if (children.length > 0) {
-        task.subTasks = []
-        children.forEach(child => {
-          const childTask = taskMap.get(child.taskId)!
-          task.subTasks!.push(childTask)
-          // Recursively build child levels
-          buildTaskLevel(child.taskId, currentLevel)
+      // Track which tasks are children (have a parent)
+      if (task.parentTaskId) {
+        childTaskIds.add(task.taskId)
+        console.log('🟢 [Gantt] Child task:', task.taskId, task.taskName, '-> Parent:', task.parentTaskId)
+      } else {
+        console.log('🔴 [Gantt] Root task:', task.taskId, task.taskName)
+      }
+    })
+    console.log('🔵 [Gantt] Total tasks in map:', taskMap.size)
+    console.log('🔵 [Gantt] Child tasks count:', childTaskIds.size)
+    console.log('🔵 [Gantt] Child task IDs:', Array.from(childTaskIds))
+
+    // Step 3: Build hierarchy - assign children to parents
+    // Use a Set to track which tasks have been added as children
+    const tasksAddedAsChildren = new Set<string>()
+    
+    deduplicatedTasks.forEach(task => {
+      if (task.parentTaskId && taskMap.has(task.parentTaskId) && taskMap.has(task.taskId)) {
+        // Only add if this task hasn't been added as a child before
+        if (!tasksAddedAsChildren.has(task.taskId)) {
+          const parentTask = taskMap.get(task.parentTaskId)!
+          const childTask = taskMap.get(task.taskId)!
+          
+          // Ensure subTasks array exists
+          if (!parentTask.subTasks) {
+            parentTask.subTasks = []
+          }
+          
+          // Double check: only add if not already in subTasks
+          const alreadyExists = parentTask.subTasks.some(st => st.taskId === task.taskId)
+          if (!alreadyExists) {
+            // Triple check: ensure childTask is not the same as parentTask (prevent self-reference)
+            if (childTask.taskId !== parentTask.taskId) {
+              parentTask.subTasks.push(childTask)
+              tasksAddedAsChildren.add(task.taskId)
+              console.log('✅ [Gantt] Added child:', task.taskId, task.taskName, 'to parent:', task.parentTaskId, parentTask.taskName, 'Parent now has', parentTask.subTasks.length, 'subTasks')
+            } else {
+              console.log('❌ [Gantt] Cannot add task as child of itself:', task.taskId, task.taskName)
+            }
+          } else {
+            console.log('⚠️ [Gantt] Child already exists in parent subTasks:', task.taskId, task.taskName, 'parent:', parentTask.taskId)
+          }
+        } else {
+          console.log('⚠️ [Gantt] Task already added as child (skipping):', task.taskId, task.taskName)
+        }
+      } else if (task.parentTaskId) {
+        console.log('❌ [Gantt] Cannot add child - parent or child not found:', {
+          taskId: task.taskId,
+          taskName: task.taskName,
+          parentTaskId: task.parentTaskId,
+          parentExists: taskMap.has(task.parentTaskId),
+          childExists: taskMap.has(task.taskId)
         })
       }
+    })
+    console.log('🔵 [Gantt] Tasks added as children:', Array.from(tasksAddedAsChildren))
 
-      return currentLevel
+    // Step 4: Clean up any remaining duplicates in subTasks (without clearing valid subTasks)
+    const cleanSubTasks = (task: GanttTask, parentPath: Set<string> = new Set()) => {
+      // Check for circular reference: if this task is in the parent path, it's a circular reference
+      if (parentPath.has(task.taskId)) {
+        console.log('⚠️ [Gantt] Circular reference detected for task:', task.taskId, task.taskName, 'parentPath:', Array.from(parentPath))
+        // Don't clear subTasks, just return to prevent infinite recursion
+        return
+      }
+      
+      // Create new path including current task
+      const newPath = new Set(parentPath)
+      newPath.add(task.taskId)
+      
+      if (task.subTasks && task.subTasks.length > 0) {
+        // Remove duplicates using Map (keep first occurrence)
+        const uniqueSubTasksMap = new Map<string, GanttTask>()
+        task.subTasks.forEach(subTask => {
+          if (!uniqueSubTasksMap.has(subTask.taskId)) {
+            // Check for circular reference before adding
+            if (!newPath.has(subTask.taskId)) {
+              uniqueSubTasksMap.set(subTask.taskId, subTask)
+              // Recursively clean subTasks with the new path
+              cleanSubTasks(subTask, new Set(newPath))
+            } else {
+              console.log('⚠️ [Gantt] Circular reference detected - skipping subTask:', subTask.taskId, subTask.taskName, 'in parent:', task.taskId)
+            }
+          } else {
+            console.log('⚠️ [Gantt] Duplicate subTask found and removed:', subTask.taskId, subTask.taskName, 'in parent:', task.taskId)
+          }
+        })
+        task.subTasks = Array.from(uniqueSubTasksMap.values())
+        console.log('🔵 [Gantt] Cleaned subTasks for:', task.taskId, task.taskName, '->', task.subTasks.length, 'unique subTasks')
+      }
     }
 
-    // Find root tasks (tasks without parent)
-    tasks.forEach(task => {
-      if (!task.parentTaskId || !taskMap.has(task.parentTaskId)) {
-        const rootTask = taskMap.get(task.taskId)!
-        rootTasks.push(rootTask)
-        // Build hierarchy starting from root
-        buildTaskLevel(task.taskId, -1)
+    // Step 5: Calculate levels recursively
+    const calculateLevels = (task: GanttTask, level: number = 0, visited: Set<string> = new Set()) => {
+      // Prevent infinite loops
+      if (visited.has(task.taskId)) {
+        console.log('⚠️ [Gantt] Already visited in calculateLevels for:', task.taskId)
+        return
+      }
+      visited.add(task.taskId)
+      
+      task.level = level
+      
+      if (task.subTasks && task.subTasks.length > 0) {
+        // Recursively calculate levels for children
+        task.subTasks.forEach(subTask => {
+          if (!visited.has(subTask.taskId)) {
+            calculateLevels(subTask, level + 1, new Set(visited))
+          }
+        })
+      }
+    }
+
+    // Step 6: Find root tasks (tasks that are NOT children) and calculate levels
+    const rootTaskIds = new Set<string>()
+    deduplicatedTasks.forEach(task => {
+      if (!childTaskIds.has(task.taskId)) {
+        rootTaskIds.add(task.taskId)
       }
     })
-
-    // Set expanded by default for all tasks (to show hierarchy)
-    tasks.forEach(task => {
-      setExpandedTasks(prev => new Set(prev).add(task.taskId))
+    console.log('🔵 [Gantt] Root task IDs found:', Array.from(rootTaskIds))
+    
+    // Step 7: Clean duplicates from all tasks before adding to root
+    // Clean subTasks for all tasks in the map first
+    taskMap.forEach((task) => {
+      cleanSubTasks(task, new Set())
     })
+    
+    // Step 8: Only add unique root tasks
+    rootTaskIds.forEach(rootTaskId => {
+      if (taskMap.has(rootTaskId)) {
+        const rootTask = taskMap.get(rootTaskId)!
+        // Make sure this task hasn't been added as a child
+        if (!tasksAddedAsChildren.has(rootTaskId)) {
+          rootTasks.push(rootTask)
+          calculateLevels(rootTask, 0)
+          console.log('✅ [Gantt] Added root task:', rootTaskId, rootTask.taskName, 'subTasks count:', rootTask.subTasks?.length || 0)
+          if (rootTask.subTasks && rootTask.subTasks.length > 0) {
+            console.log('✅ [Gantt] Root task subTasks:', rootTask.subTasks.map(st => ({
+              id: st.taskId,
+              name: st.taskName,
+              subTasksCount: st.subTasks?.length || 0
+            })))
+          }
+        } else {
+          console.log('⚠️ [Gantt] Root task was already added as child (skipping):', rootTaskId)
+        }
+      } else {
+        console.log('❌ [Gantt] Root task not found in map:', rootTaskId)
+      }
+    })
+    console.log('🔵 [Gantt] Final root tasks count:', rootTasks.length)
+    console.log('🔵 [Gantt] Final root tasks with subTasks:', rootTasks.map(rt => ({
+      id: rt.taskId,
+      name: rt.taskName,
+      subTasksCount: rt.subTasks?.length || 0,
+      subTasks: rt.subTasks?.map(st => ({
+        id: st.taskId,
+        name: st.taskName,
+        subTasksCount: st.subTasks?.length || 0
+      })) || []
+    })))
 
     return rootTasks
+  }
+  
+  // Helper function to collect all task IDs recursively
+  const collectAllTaskIds = (tasks: GanttTask[], taskIds: Set<string> = new Set()): Set<string> => {
+    tasks.forEach(task => {
+      taskIds.add(task.taskId)
+      if (task.subTasks && task.subTasks.length > 0) {
+        collectAllTaskIds(task.subTasks, taskIds)
+      }
+    })
+    return taskIds
   }
 
   const toggleTaskExpansion = (taskId: string) => {
@@ -149,16 +409,6 @@ export default function GanttChart({ projectId }: GanttChartProps) {
     })
   }
 
-  const flattenTasks = (tasks: GanttTask[]): GanttTask[] => {
-    const result: GanttTask[] = []
-    tasks.forEach(task => {
-      result.push(task)
-      if (task.subTasks && task.subTasks.length > 0 && expandedTasks.has(task.taskId)) {
-        result.push(...flattenTasks(task.subTasks))
-      }
-    })
-    return result
-  }
 
   const saveVersion = async () => {
     // TODO: Implement version saving
@@ -183,9 +433,30 @@ export default function GanttChart({ projectId }: GanttChartProps) {
     )
   }
 
-  const flatTasks = flattenTasks(data.taskSchedules)
+  // data.taskSchedules already contains only root tasks from buildHierarchicalTasks
+  // So we can use them directly - subTasks will be rendered recursively
+  // IMPORTANT: Only render root tasks here, subTasks will be rendered inside renderTask
+  const rootTasksOnly = data.taskSchedules || []
+  console.log('🟠 [Gantt] Root tasks only (for rendering):', rootTasksOnly.length)
+  console.log('🟠 [Gantt] Expanded tasks state:', {
+    size: expandedTasks.size,
+    hasAll: Array.from(expandedTasks)
+  })
+  console.log('🟠 [Gantt] Root task IDs:', rootTasksOnly.map(t => ({ 
+    id: t.taskId, 
+    name: t.taskName, 
+    subTasksCount: t.subTasks?.length || 0,
+    subTaskIds: t.subTasks?.map(st => st.taskId) || [],
+    isExpanded: expandedTasks.has(t.taskId),
+    subTasksDetails: t.subTasks?.map(st => ({
+      id: st.taskId,
+      name: st.taskName,
+      subTasksCount: st.subTasks?.length || 0,
+      isExpanded: expandedTasks.has(st.taskId)
+    })) || []
+  })))
 
-  if (flatTasks.length === 0) {
+  if (rootTasksOnly.length === 0) {
     return (
       <div className="text-center py-20 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-dashed border-gray-300">
         <Calendar className="w-16 h-16 mx-auto text-gray-400 mb-4" />
@@ -214,11 +485,11 @@ export default function GanttChart({ projectId }: GanttChartProps) {
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
 
       if (zoom === 'day') {
-        headers.push({
-          date: new Date(current),
+      headers.push({
+        date: new Date(current),
           label: formatPersianDate(current).split('/')[2], // فقط روز
           isWeekend,
-        })
+      })
         current = addDays(current, 1)
       } else if (zoom === 'week') {
         const weekStart = startOfWeek(current, { weekStartsOn: 6 }) // شنبه
@@ -296,75 +567,188 @@ export default function GanttChart({ projectId }: GanttChartProps) {
     }
   }
 
-  const renderTask = (task: GanttTask, index: number) => {
+  const renderTask = (task: GanttTask, index: number, parentTask?: GanttTask, renderedTaskIds: Set<string> = new Set()) => {
+    // Prevent duplicate rendering
+    if (renderedTaskIds.has(task.taskId)) {
+      console.log('⚠️ [Gantt] Task already rendered, skipping:', task.taskId, task.taskName)
+      return null
+    }
+    renderedTaskIds.add(task.taskId)
+    
     const position = getTaskPosition(
       task.calculatedStartDate,
       task.calculatedEndDate
     )
     const hasSubTasks = task.subTasks && task.subTasks.length > 0
     const isExpanded = expandedTasks.has(task.taskId)
-    // Support up to 3 levels with proper indentation (24px per level)
-    const indentLevel = Math.min((task.level || 0), 2) * 24
+    const taskLevel = task.level || 0
+    
+    // Always log for debugging
+    console.log('🎨 [Gantt] Rendering task:', {
+      taskId: task.taskId,
+      taskName: task.taskName,
+      level: taskLevel,
+      hasSubTasks,
+      subTasksCount: task.subTasks?.length || 0,
+      subTaskIds: task.subTasks?.map(st => st.taskId) || [],
+      isExpanded,
+      expandedTasksSize: expandedTasks.size,
+      isInExpandedSet: expandedTasks.has(task.taskId)
+    })
+    // Better indentation: 32px per level with visual connectors
+    const indentLevel = taskLevel * 32
+    const isLastChild = parentTask && parentTask.subTasks && 
+      parentTask.subTasks[parentTask.subTasks.length - 1]?.taskId === task.taskId
+
+    // Calculate summary bar for parent tasks
+    const getSummaryBar = () => {
+      if (!hasSubTasks || !isExpanded || !task.subTasks || task.subTasks.length === 0) return null
+      
+      const subTaskDates = task.subTasks
+        .filter(st => st.calculatedStartDate && st.calculatedEndDate)
+        .map(st => ({
+          start: new Date(st.calculatedStartDate!),
+          end: new Date(st.calculatedEndDate!)
+        }))
+      
+      if (subTaskDates.length === 0) return null
+      
+      const minStart = new Date(Math.min(...subTaskDates.map(d => d.start.getTime())))
+      const maxEnd = new Date(Math.max(...subTaskDates.map(d => d.end.getTime())))
+      
+      const summaryPosition = getTaskPosition(
+        minStart.toISOString(),
+        maxEnd.toISOString()
+      )
+      
+      return { position: summaryPosition, start: minStart, end: maxEnd }
+    }
+
+    const summaryBar = getSummaryBar()
 
     return (
-      <div key={task.taskId}>
+      <div key={task.taskId} className="relative">
+        {/* Connector Lines for Hierarchy */}
+        {taskLevel > 0 && (
+          <div 
+            className="absolute top-0 bottom-0 z-0"
+            style={{
+              left: `${indentLevel - 20}px`,
+              width: '3px',
+            }}
+          >
+            {/* Vertical line */}
+            <div className="absolute top-0 bottom-0 w-full bg-gradient-to-b from-gray-300 via-gray-400 to-gray-300 opacity-60"></div>
+            {/* Horizontal connector to parent */}
+            <div 
+              className="absolute top-1/2 h-0.5 bg-gradient-to-r from-gray-300 to-gray-400 opacity-60"
+              style={{
+                left: '-20px',
+                width: '20px',
+                top: '50%',
+              }}
+            />
+            {/* Vertical line extension if not last child */}
+            {!isLastChild && (
+              <div 
+                className="absolute top-0 bottom-0 w-full bg-gradient-to-b from-gray-300 via-gray-400 to-gray-300 opacity-60"
+                style={{
+                  left: '-20px',
+                  height: '100%',
+                }}
+              />
+            )}
+          </div>
+        )}
+
         <div
-          className="flex border-b border-gray-100 hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all group"
-          style={{ minHeight: '60px' }}
+          className={`flex border-b-2 transition-all duration-300 group relative min-w-max ${
+            taskLevel === 0 
+              ? 'border-blue-200/50 bg-gradient-to-r from-blue-50/40 via-white to-white hover:from-blue-50 hover:via-blue-50/30 hover:to-white hover:shadow-md' 
+              : taskLevel === 1
+              ? 'border-indigo-200/50 bg-gradient-to-r from-indigo-50/30 via-white to-white hover:from-indigo-50 hover:via-indigo-50/20 hover:to-white hover:shadow-md'
+              : 'border-purple-200/50 bg-gradient-to-r from-purple-50/20 via-white to-white hover:from-purple-50 hover:via-purple-50/10 hover:to-white hover:shadow-md'
+          }`}
+          style={{ minHeight: hasSubTasks ? '80px' : '70px' }}
         >
           {/* Task Name Column */}
           <div 
-            className="w-64 border-r border-gray-200 p-4 bg-white flex items-center group-hover:bg-gray-50 transition-colors"
-            style={{ paddingLeft: `${16 + indentLevel}px` }}
+            className={`w-72 border-r-2 border-gray-200 p-5 flex items-center transition-all duration-300 relative z-10 shrink-0 sticky left-0 backdrop-blur-sm ${
+              taskLevel === 0 
+                ? 'bg-gradient-to-br from-blue-50/60 via-blue-50/30 to-white shadow-sm' 
+                : taskLevel === 1
+                ? 'bg-gradient-to-br from-indigo-50/40 via-indigo-50/20 to-white shadow-sm'
+                : 'bg-gradient-to-br from-purple-50/20 to-white shadow-sm'
+            }`}
+            style={{ 
+              paddingLeft: `${20 + indentLevel}px`,
+              paddingRight: '20px',
+              left: '0',
+            }}
           >
-            <div className="flex-1 flex items-center gap-2">
+            <div className="flex-1 flex items-center gap-3">
               {hasSubTasks ? (
                 <button
                   onClick={() => toggleTaskExpansion(task.taskId)}
-                  className="p-1 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
-                  title={isExpanded ? 'بستن' : 'باز کردن'}
+                  className={`p-2 hover:bg-gray-200 rounded-xl transition-all flex-shrink-0 shadow-md hover:shadow-lg transform hover:scale-110 ${
+                    isExpanded ? 'bg-gradient-to-br from-primary-100 to-primary-200 text-primary-700' : 'bg-white text-gray-600'
+                  }`}
+                  title={isExpanded ? (isRTL ? 'بستن' : 'Collapse') : (isRTL ? 'باز کردن' : 'Expand')}
                 >
                   {isExpanded ? (
-                    <ChevronDown className="w-4 h-4 text-gray-600" />
+                    <ChevronDown className="w-5 h-5" />
                   ) : (
-                    <ChevronRight className="w-4 h-4 text-gray-600" />
+                    <ChevronRight className="w-5 h-5" />
                   )}
                 </button>
               ) : (
-                <div className="w-6 flex-shrink-0" />
+                <div className="w-9 flex-shrink-0" />
               )}
+              
+              {/* Level Indicator */}
+              {taskLevel > 0 && (
+                <div className={`w-1.5 h-10 rounded-full flex-shrink-0 shadow-sm ${
+                  taskLevel === 1 ? 'bg-gradient-to-b from-indigo-400 to-indigo-600' : 'bg-gradient-to-b from-purple-400 to-purple-600'
+                }`} />
+              )}
+              
               <div
-                className={`w-3 h-3 rounded-full flex-shrink-0 ${getStatusColor(task.status)}`}
+                className={`w-4 h-4 rounded-full flex-shrink-0 shadow-lg border-2 border-white ${getStatusColor(task.status)}`}
               ></div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className={`font-medium text-gray-900 text-sm truncate ${
-                    task.level === 0 ? 'font-bold' : task.level === 1 ? 'font-semibold' : ''
+                <div className="flex items-center gap-2.5">
+                  <span className={`text-gray-900 truncate ${
+                    taskLevel === 0 ? 'font-bold text-base' : taskLevel === 1 ? 'font-semibold text-sm' : 'font-medium text-sm'
                   }`}>
                     {task.taskName || `تسک ${index + 1}`}
                   </span>
                   {task.isOnCriticalPath && (
-                    <Badge variant="danger" className="text-xs px-1.5 py-0.5 flex-shrink-0">
-                      بحرانی
+                    <Badge variant="danger" className="text-xs px-2 py-1 flex-shrink-0 animate-pulse shadow-md">
+                      ⚡ {isRTL ? 'بحرانی' : 'Critical'}
                     </Badge>
+                  )}
+                  {taskLevel > 0 && (
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-md font-semibold border border-gray-200">
+                      L{taskLevel + 1}
+                    </span>
                   )}
                 </div>
                 {task.calculatedStartDate && task.calculatedEndDate && (
-                  <div className="text-xs text-gray-500 mt-1">
-                    {formatPersianDate(task.calculatedStartDate)} -{' '}
-                    {formatPersianDate(task.calculatedEndDate)}
+                  <div className="text-xs text-gray-600 mt-2 flex items-center gap-1.5 font-medium">
+                    <Calendar className="w-3.5 h-3.5 text-primary-600" />
+                    {formatPersianDate(task.calculatedStartDate)} - {formatPersianDate(task.calculatedEndDate)}
                   </div>
                 )}
                 {task.percentComplete !== undefined && (
-                  <div className="mt-1">
-                    <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="mt-3">
+                    <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden shadow-inner border border-gray-300">
                       <div
-                        className="h-full bg-gradient-to-r from-green-500 to-emerald-600 transition-all"
+                        className="h-full bg-gradient-to-r from-green-400 via-green-500 to-emerald-600 transition-all duration-500 shadow-md"
                         style={{ width: `${task.percentComplete}%` }}
                       />
                     </div>
-                    <span className="text-xs text-gray-500 mt-0.5">
-                      {task.percentComplete}%
+                    <span className="text-xs text-gray-700 mt-1 font-semibold">
+                      {task.percentComplete}% {isRTL ? 'تکمیل شده' : 'Complete'}
                     </span>
                   </div>
                 )}
@@ -373,94 +757,168 @@ export default function GanttChart({ projectId }: GanttChartProps) {
           </div>
 
           {/* Timeline Column */}
-          <div className="flex-1 relative bg-gradient-to-b from-gray-50 to-white">
+          <div className="flex-1 relative bg-gradient-to-b from-gray-50 via-white to-gray-50/50 min-w-max">
             {/* Grid Lines */}
-            <div className="absolute inset-0 flex">
+            <div className="absolute inset-0 flex min-w-max">
               {dateHeaders.map((_, idx) => (
                 <div
                   key={idx}
-                  className="flex-1 border-r border-gray-200 border-dashed"
+                  className={`w-36 border-r-2 shrink-0 transition-colors ${
+                    idx % 7 === 0 ? 'border-primary-300 bg-primary-50/20' : 'border-gray-200'
+                  } ${idx % 7 === 0 ? 'border-solid' : 'border-dashed'}`}
                 ></div>
               ))}
             </div>
 
+            {/* Summary Bar for Parent Tasks */}
+            {summaryBar && (
+              <div
+                className="absolute top-3 h-4 rounded-full bg-gradient-to-r from-gray-400 via-gray-500 to-gray-600 opacity-50 border-2 border-dashed border-gray-600 z-0 shadow-lg"
+                style={{
+                  left: `${summaryBar.position.left}%`,
+                  width: `${summaryBar.position.width}%`,
+                  minWidth: '50px',
+                }}
+                title={`${isRTL ? 'خلاصه' : 'Summary'}: ${formatPersianDate(summaryBar.start)} - ${formatPersianDate(summaryBar.end)}`}
+              />
+            )}
+
             {/* Task Bar */}
             {task.calculatedStartDate && task.calculatedEndDate && (
               <div
-                className={`absolute top-1/2 -translate-y-1/2 h-10 rounded-lg ${getTaskColor(
+                className={`absolute top-1/2 -translate-y-1/2 rounded-xl ${getTaskColor(
                   task
-                )} text-white flex items-center justify-between px-3 cursor-pointer transition-all hover:scale-105 hover:shadow-xl group/task`}
-                style={isRTL ? {
-                  right: `${position.right}%`,
-                  width: `${position.width}%`,
-                  minWidth: '60px',
-                } : {
+                )} text-white flex items-center justify-between px-4 cursor-pointer transition-all duration-300 hover:scale-110 hover:shadow-2xl hover:z-20 group/task border-3 border-white/40 shadow-xl ${
+                  hasSubTasks ? 'h-14' : 'h-12'
+                }`}
+                style={{
                   left: `${position.left}%`,
                   width: `${position.width}%`,
-                  minWidth: '60px',
+                  minWidth: '80px',
                 }}
                 title={`${task.taskName}\n${formatPersianDate(
                   task.calculatedStartDate
                 )} - ${formatPersianDate(task.calculatedEndDate)}\n${
                   task.calculatedDuration
-                } روز`}
+                } ${isRTL ? 'روز' : 'days'}\n${task.percentComplete !== undefined ? `${task.percentComplete}% ${isRTL ? 'تکمیل شده' : 'Complete'}` : ''}`}
               >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <div className="w-2 h-2 bg-white rounded-full opacity-80"></div>
-                  <span className="text-xs font-semibold truncate">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className={`w-3 h-3 bg-white rounded-full shadow-lg flex-shrink-0 ${
+                    task.isOnCriticalPath ? 'animate-pulse ring-2 ring-red-300' : ''
+                  }`}></div>
+                  <span className={`font-bold truncate ${
+                    hasSubTasks ? 'text-sm' : 'text-xs'
+                  }`}>
                     {task.taskName}
                   </span>
                 </div>
-                <div className="text-xs font-bold bg-white/20 px-2 py-1 rounded ml-2 whitespace-nowrap">
-                  {task.calculatedDuration} روز
+                <div className="flex items-center gap-2.5 flex-shrink-0">
+                  {task.percentComplete !== undefined && task.percentComplete > 0 && (
+                    <div className="text-xs font-bold bg-white/40 px-2.5 py-1 rounded-lg shadow-md backdrop-blur-sm">
+                      {task.percentComplete}%
+                    </div>
+                  )}
+                  <div className="text-xs font-bold bg-white/30 px-2.5 py-1 rounded-lg whitespace-nowrap shadow-md backdrop-blur-sm">
+                    {task.calculatedDuration} {isRTL ? 'روز' : 'd'}
+                  </div>
                 </div>
               </div>
             )}
-          </div>
-        </div>
-        {/* Render SubTasks (supports multiple levels) */}
-        {hasSubTasks && isExpanded && task.subTasks && (
-          <div className={`${
-            task.level === 0 ? 'bg-blue-50/30' : 
-            task.level === 1 ? 'bg-indigo-50/20' : 
-            'bg-gray-50/10'
-          }`}>
-            {task.subTasks.map((subTask, subIndex) => 
-              renderTask(subTask, index * 100 + subIndex)
+
+            {/* Progress Indicator on Task Bar */}
+            {task.percentComplete !== undefined && task.percentComplete > 0 && 
+             task.calculatedStartDate && task.calculatedEndDate && (
+              <div
+                className={`absolute top-1/2 translate-y-3 rounded-full h-2 bg-gradient-to-r from-green-400 via-green-500 to-emerald-600 shadow-lg ${
+                  task.isOnCriticalPath ? 'ring-2 ring-red-400' : ''
+                }`}
+                style={{
+                  left: `${position.left}%`,
+                  width: `${(position.width * task.percentComplete) / 100}%`,
+                  minWidth: '6px',
+                }}
+              />
             )}
           </div>
-        )}
+        </div>
+        
+        {/* Render SubTasks (supports multiple levels) - Only render if expanded */}
+        {/* CRITICAL: Only render subTasks here, they should NOT be in the root tasks list */}
+        {(() => {
+          console.log('🔍 [Gantt] Checking subTasks render for:', task.taskId, task.taskName, {
+            hasSubTasks,
+            isExpanded,
+            subTasksCount: task.subTasks?.length || 0,
+            expandedTasksHas: expandedTasks.has(task.taskId),
+            expandedTasksSize: expandedTasks.size
+          })
+          
+          if (!hasSubTasks) {
+            console.log('❌ [Gantt] No subTasks for:', task.taskId)
+            return null
+          }
+          
+          if (!isExpanded) {
+            console.log('❌ [Gantt] Task not expanded:', task.taskId, 'expandedTasks.has:', expandedTasks.has(task.taskId))
+            return null
+          }
+          
+          if (!task.subTasks || task.subTasks.length === 0) {
+            console.log('❌ [Gantt] subTasks array is empty for:', task.taskId)
+            return null
+          }
+          
+          console.log('✅ [Gantt] Rendering subTasks for:', task.taskId, 'count:', task.subTasks.length)
+          
+          return (
+            <div className={`relative transition-all duration-300 ${
+              task.level === 0 ? 'bg-gradient-to-r from-blue-50/30 via-blue-50/20 to-transparent border-l-4 border-blue-400 shadow-inner' : 
+              task.level === 1 ? 'bg-gradient-to-r from-indigo-50/25 via-indigo-50/15 to-transparent border-l-4 border-indigo-400 shadow-inner' : 
+              'bg-gradient-to-r from-purple-50/20 via-purple-50/10 to-transparent border-l-4 border-purple-400 shadow-inner'
+            }`}>
+              {task.subTasks
+                .filter((subTask, idx, arr) => {
+                  // Remove duplicates: only keep first occurrence
+                  return arr.findIndex(t => t.taskId === subTask.taskId) === idx
+                })
+                .map((subTask, subIndex) => {
+                  console.log('🟠 [Gantt] Rendering subTask:', subTask.taskId, subTask.taskName, 'of parent:', task.taskId, 'subIndex:', subIndex)
+                  return renderTask(subTask, index * 1000 + subIndex, task, renderedTaskIds)
+                })}
+            </div>
+          )
+        })()}
       </div>
     )
   }
 
   return (
-    <div className="space-y-4" dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className="space-y-4" dir="ltr">
       {/* Header with Controls */}
-      <Card className="p-4 bg-gradient-to-br from-white to-gray-50/50">
-        <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
-          <div className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-            <div className="p-2 bg-gradient-to-br from-primary-100 to-primary-200 rounded-xl">
-              <Calendar className="w-5 h-5 text-primary-600" />
+      <Card className="p-6 bg-gradient-to-br from-white via-primary-50/30 to-white shadow-xl border border-primary-100">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gradient-to-br from-primary-500 via-primary-600 to-primary-700 rounded-2xl shadow-lg transform hover:scale-105 transition-transform">
+              <Calendar className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+              <h3 className="text-2xl font-bold bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 bg-clip-text text-transparent">
                 {isRTL ? 'نمودار گانت' : 'Gantt Chart'}
               </h3>
-              <p className="text-sm text-gray-500">
-                {flatTasks.length} {isRTL ? 'تسک' : 'tasks'} • {totalDays} {isRTL ? 'روز' : 'days'}
+              <p className="text-sm text-gray-600 mt-1 font-medium">
+                {data.allTasks?.length || data.taskSchedules.length} {isRTL ? 'تسک' : 'tasks'} • {totalDays} {isRTL ? 'روز' : 'days'} • {formatPersianDate(startDate)} - {formatPersianDate(endDate)}
               </p>
             </div>
           </div>
 
-          <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+          <div className="flex items-center gap-3">
             {/* Version Selector */}
             <div className="relative">
               <select
                 value={selectedVersion || 'current'}
                 onChange={(e) => setSelectedVersion(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-sm"
-                dir={isRTL ? 'rtl' : 'ltr'}
+                className="px-4 py-2.5 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-sm font-medium shadow-sm hover:shadow-md transition-all"
+                dir="ltr"
               >
                 {versions.map(v => (
                   <option key={v.id} value={v.id}>{v.name}</option>
@@ -473,6 +931,7 @@ export default function GanttChart({ projectId }: GanttChartProps) {
               size="sm"
               onClick={() => setShowVersionModal(true)}
               leftIcon={<Save className="w-4 h-4" />}
+              className="border-2 hover:bg-primary-50 hover:border-primary-300 transition-all shadow-sm hover:shadow-md"
             >
               {isRTL ? 'ذخیره نسخه' : 'Save Version'}
             </Button>
@@ -481,147 +940,175 @@ export default function GanttChart({ projectId }: GanttChartProps) {
               variant="outline"
               size="sm"
               leftIcon={<History className="w-4 h-4" />}
+              className="border-2 hover:bg-primary-50 hover:border-primary-300 transition-all shadow-sm hover:shadow-md"
             >
               {isRTL ? 'تاریخچه' : 'History'}
             </Button>
 
-            {/* Zoom Controls */}
-            <div className={`flex items-center gap-1 bg-gray-100 rounded-xl p-1 ${isRTL ? 'flex-row-reverse' : ''}`}>
-              <button
-                onClick={() => setZoom('day')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+      {/* Zoom Controls */}
+            <div className="flex items-center gap-1 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-1.5 border border-gray-200 shadow-inner">
+          <button
+            onClick={() => setZoom('day')}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all transform hover:scale-105 ${
                   zoom === 'day'
-                    ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-md'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-white'
+                    ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg scale-105'
+                    : 'text-gray-600 hover:text-primary-600 hover:bg-white'
                 }`}
               >
                 {isRTL ? 'روزانه' : 'Day'}
-              </button>
-              <button
-                onClick={() => setZoom('week')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+          </button>
+          <button
+            onClick={() => setZoom('week')}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all transform hover:scale-105 ${
                   zoom === 'week'
-                    ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-md'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-white'
+                    ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg scale-105'
+                    : 'text-gray-600 hover:text-primary-600 hover:bg-white'
                 }`}
               >
                 {isRTL ? 'هفتگی' : 'Week'}
-              </button>
-              <button
-                onClick={() => setZoom('month')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+          </button>
+          <button
+            onClick={() => setZoom('month')}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all transform hover:scale-105 ${
                   zoom === 'month'
-                    ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-md'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-white'
+                    ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg scale-105'
+                    : 'text-gray-600 hover:text-primary-600 hover:bg-white'
                 }`}
               >
                 {isRTL ? 'ماهانه' : 'Month'}
-              </button>
-            </div>
-          </div>
+          </button>
+        </div>
+      </div>
         </div>
       </Card>
 
       {/* Legend */}
-      <Card className="p-3 bg-gradient-to-br from-white to-gray-50/50">
-        <div className={`flex flex-wrap items-center gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gradient-to-r from-blue-500 to-blue-600"></div>
-            <span className="text-sm text-gray-700 font-medium">{isRTL ? 'تسک اصلی (سطح 1)' : 'Main Task (Level 1)'}</span>
+      <Card className="p-4 bg-gradient-to-br from-white via-gray-50 to-white shadow-lg border border-gray-200">
+        <div className="flex flex-wrap items-center gap-6">
+          <div className="flex items-center gap-2.5 px-3 py-2 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="w-5 h-5 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-md"></div>
+            <span className="text-sm text-gray-800 font-semibold">{isRTL ? 'تسک اصلی (سطح 1)' : 'Main Task (Level 1)'}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gradient-to-r from-indigo-500 to-indigo-600"></div>
-            <span className="text-sm text-gray-700 font-medium">{isRTL ? 'زیرتسک (سطح 2)' : 'Sub-task (Level 2)'}</span>
+          {/* <div className="flex items-center gap-2.5 px-3 py-2 bg-indigo-50 rounded-lg border border-indigo-200">
+            <div className="w-5 h-5 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 shadow-md"></div>
+            <span className="text-sm text-gray-800 font-semibold">{isRTL ? 'زیرتسک (سطح 2)' : 'Sub-task (Level 2)'}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gradient-to-r from-purple-500 to-purple-600"></div>
-            <span className="text-sm text-gray-700 font-medium">{isRTL ? 'زیرزیرتسک (سطح 3)' : 'Sub-sub-task (Level 3)'}</span>
+          <div className="flex items-center gap-2.5 px-3 py-2 bg-purple-50 rounded-lg border border-purple-200">
+            <div className="w-5 h-5 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 shadow-md"></div>
+            <span className="text-sm text-gray-800 font-semibold">{isRTL ? 'زیرزیرتسک (سطح 3)' : 'Sub-sub-task (Level 3)'}</span>
+          </div> */}
+          <div className="flex items-center gap-2.5 px-3 py-2 bg-red-50 rounded-lg border border-red-200">
+            <div className="w-5 h-5 rounded-lg bg-gradient-to-br from-red-500 to-red-600 shadow-md animate-pulse"></div>
+            <span className="text-sm text-gray-800 font-semibold">{isRTL ? 'مسیر بحرانی' : 'Critical Path'}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gradient-to-r from-red-500 to-red-600"></div>
-            <span className="text-sm text-gray-700 font-medium">{isRTL ? 'مسیر بحرانی' : 'Critical Path'}</span>
+          <div className="flex items-center gap-2.5 px-3 py-2 bg-green-50 rounded-lg border border-green-200">
+            <div className="w-4 h-4 rounded-full bg-gradient-to-br from-green-400 to-green-600 shadow-sm border-2 border-white"></div>
+            <span className="text-sm text-gray-800 font-semibold">{isRTL ? 'در حال انجام' : 'In Progress'}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            <span className="text-sm text-gray-700 font-medium">{isRTL ? 'در حال انجام' : 'In Progress'}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-emerald-600"></div>
-            <span className="text-sm text-gray-700 font-medium">{isRTL ? 'تکمیل شده' : 'Completed'}</span>
+          <div className="flex items-center gap-2.5 px-3 py-2 bg-emerald-50 rounded-lg border border-emerald-200">
+            <div className="w-4 h-4 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-sm border-2 border-white"></div>
+            <span className="text-sm text-gray-800 font-semibold">{isRTL ? 'تکمیل شده' : 'Completed'}</span>
           </div>
         </div>
       </Card>
 
       {/* Gantt Chart */}
-      <Card className="p-0 overflow-hidden bg-gradient-to-br from-white to-gray-50/50">
-        <div ref={ganttRef} className="overflow-x-auto" style={{ maxHeight: '600px' }}>
-          <div className="min-w-full">
+      <Card className="p-0 overflow-hidden bg-gradient-to-br from-white via-gray-50/50 to-white shadow-2xl border-2 border-gray-200">
+        <div 
+          ref={ganttRef} 
+          className="overflow-auto scrollbar-thin scrollbar-thumb-primary-400 scrollbar-track-gray-100 hover:scrollbar-thumb-primary-500"
+          style={{ 
+            maxHeight: '75vh',
+            height: '75vh',
+            scrollBehavior: 'smooth'
+          }}
+        >
+          <div className="inline-block min-w-full">
             {/* Sticky Header */}
-            <div className="sticky top-0 z-10 bg-gradient-to-r from-gray-50 via-gray-100 to-gray-50 border-b-2 border-gray-300 shadow-md">
-              <div className="flex">
-                <div className="w-64 border-r-2 border-gray-300 p-4 bg-white font-bold text-gray-800 flex items-center">
-                  <span>{isRTL ? 'نام تسک' : 'Task Name'}</span>
-                </div>
-                <div className="flex-1 flex">
-                  {dateHeaders.map((header, index) => (
-                    <div
-                      key={index}
-                      className={`flex-1 border-r border-gray-200 p-3 text-center min-w-[120px] ${
-                        header.isWeekend ? 'bg-red-50' : 'bg-white'
+            <div className="sticky top-0 z-20 bg-gradient-to-r from-primary-50 via-white to-primary-50 border-b-4 border-primary-300 shadow-xl">
+              <div className="flex min-w-max">
+                <div className="w-72 border-r-4 border-primary-300 p-5 bg-gradient-to-br from-primary-50 to-white font-bold text-gray-900 flex items-center shrink-0 sticky left-0 z-30 shadow-xl backdrop-blur-sm">
+                  <span className="text-base">{isRTL ? 'نام تسک' : 'Task Name'}</span>
+            </div>
+                <div className="flex min-w-max">
+              {dateHeaders.map((header, index) => (
+                <div
+                  key={index}
+                      className={`w-36 border-r-2 border-gray-200 p-4 text-center shrink-0 transition-colors ${
+                        header.isWeekend ? 'bg-gradient-to-b from-red-50 to-red-100 border-red-200' : 'bg-white hover:bg-gray-50'
                       }`}
-                    >
-                      <div className="text-sm font-semibold text-gray-800">
-                        {header.label}
+                >
+                      <div className="text-sm font-bold text-gray-900 whitespace-nowrap">
+                  {header.label}
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div className="text-xs text-gray-600 mt-1.5 whitespace-nowrap font-medium">
                         {formatPersianDate(header.date)}
                       </div>
-                    </div>
-                  ))}
                 </div>
-              </div>
+              ))}
+                </div>
             </div>
+          </div>
 
-            {/* Tasks */}
-            <div className="bg-white">
-              {flatTasks.map((task, index) => renderTask(task, index))}
+          {/* Tasks - Only render root tasks, subTasks will be rendered recursively */}
+          {/* CRITICAL: rootTasksOnly should ONLY contain root tasks (no children) */}
+            <div className="bg-white relative min-w-max">
+              {(() => {
+                const renderedTaskIds = new Set<string>()
+                return rootTasksOnly
+                  .filter((task, idx, arr) => {
+                    // Safety check: ensure no duplicates in root tasks
+                    return arr.findIndex(t => t.taskId === task.taskId) === idx
+                  })
+                  .map((task, index) => {
+                    console.log('🟠 [Gantt] Rendering root task:', task.taskId, task.taskName, 'index:', index, 'subTasksCount:', task.subTasks?.length || 0)
+                    return renderTask(task, index, undefined, renderedTaskIds)
+                  })
+                  .filter(task => task !== null)
+              })()}
             </div>
           </div>
         </div>
       </Card>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
-          <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <Card className="p-6 bg-gradient-to-br from-blue-50 via-blue-100 to-blue-50 border-2 border-blue-300 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
+          <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-blue-700 font-medium">{isRTL ? 'کل تسک‌ها' : 'Total Tasks'}</div>
-              <div className="text-2xl font-bold text-blue-900 mt-1">
-                {flatTasks.length}
+              <div className="text-sm text-blue-700 font-semibold uppercase tracking-wide mb-2">{isRTL ? 'کل تسک‌ها' : 'Total Tasks'}</div>
+              <div className="text-4xl font-bold text-blue-900 mt-1 bg-gradient-to-r from-blue-700 to-blue-900 bg-clip-text text-transparent">
+                {data.allTasks?.length || data.taskSchedules.length}
               </div>
             </div>
-            <GitBranch className="w-8 h-8 text-blue-600 opacity-50" />
+            <div className="p-4 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl shadow-lg transform rotate-6 hover:rotate-12 transition-transform">
+              <GitBranch className="w-10 h-10 text-white" />
+            </div>
           </div>
         </Card>
-        <Card className="p-4 bg-gradient-to-br from-red-50 to-red-100 border border-red-200">
-          <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
+        <Card className="p-6 bg-gradient-to-br from-red-50 via-red-100 to-red-50 border-2 border-red-300 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
+          <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-red-700 font-medium">{isRTL ? 'مسیر بحرانی' : 'Critical Path'}</div>
-              <div className="text-2xl font-bold text-red-900 mt-1">
-                {flatTasks.filter((t) => t.isOnCriticalPath).length}
+              <div className="text-sm text-red-700 font-semibold uppercase tracking-wide mb-2">{isRTL ? 'مسیر بحرانی' : 'Critical Path'}</div>
+              <div className="text-4xl font-bold text-red-900 mt-1 bg-gradient-to-r from-red-700 to-red-900 bg-clip-text text-transparent">
+                {(data.allTasks || data.taskSchedules).filter((t) => t.isOnCriticalPath).length}
               </div>
             </div>
-            <div className="w-8 h-8 bg-red-600 rounded-lg opacity-50"></div>
-          </div>
-        </Card>
-        <Card className="p-4 bg-gradient-to-br from-green-50 to-green-100 border border-green-200">
-          <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
-            <div>
-              <div className="text-sm text-green-700 font-medium">{isRTL ? 'مدت زمان کل' : 'Total Duration'}</div>
-              <div className="text-2xl font-bold text-green-900 mt-1">{totalDays} {isRTL ? 'روز' : 'days'}</div>
+            <div className="p-4 bg-gradient-to-br from-red-500 to-red-700 rounded-2xl shadow-lg transform -rotate-6 hover:-rotate-12 transition-transform">
+              <div className="w-10 h-10 bg-white rounded-lg opacity-90"></div>
             </div>
-            <Calendar className="w-8 h-8 text-green-600 opacity-50" />
-          </div>
+                  </div>
+        </Card>
+        <Card className="p-6 bg-gradient-to-br from-green-50 via-green-100 to-green-50 border-2 border-green-300 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm text-green-700 font-semibold uppercase tracking-wide mb-2">{isRTL ? 'مدت زمان کل' : 'Total Duration'}</div>
+              <div className="text-4xl font-bold text-green-900 mt-1 bg-gradient-to-r from-green-700 to-green-900 bg-clip-text text-transparent">{totalDays} {isRTL ? 'روز' : 'days'}</div>
+                      </div>
+            <div className="p-4 bg-gradient-to-br from-green-400 to-green-600 rounded-2xl shadow-lg transform rotate-6 hover:rotate-12 transition-transform">
+              <Calendar className="w-10 h-10 text-white" />
+                  </div>
+                </div>
         </Card>
       </div>
 
@@ -644,9 +1131,9 @@ export default function GanttChart({ projectId }: GanttChartProps) {
               <Button onClick={saveVersion} className="bg-gradient-to-r from-primary-600 to-primary-700">
                 {isRTL ? 'ذخیره' : 'Save'}
               </Button>
-            </div>
           </div>
         </div>
+      </div>
       )}
     </div>
   )

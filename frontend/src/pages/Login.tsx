@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { LogIn, Sparkles } from 'lucide-react'
+import { LogIn } from 'lucide-react'
 import api from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { useUIStore } from '../store/uiStore'

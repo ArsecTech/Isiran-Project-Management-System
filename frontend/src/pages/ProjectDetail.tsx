@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import api, { projectApi, ganttApi, taskApi } from '../services/api'
+import api, { projectApi, taskApi } from '../services/api'
 import { Project, Task } from '../types'
 import GanttChart from '../components/GanttChart'
 import { useUIStore } from '../store/uiStore'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
-import LoadingSpinner from '../components/ui/LoadingSpinner'
 import Skeleton from '../components/ui/Skeleton'
 import {
   ArrowLeft,

@@ -1,8 +1,8 @@
 import axios from 'axios'
-import type { Project, Task, Resource, PagedResult } from '../types'
+import type { Project, Task, PagedResult } from '../types'
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: 'https://ipmsbk.coretexia.com/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -31,8 +31,10 @@ api.interceptors.response.use(
 
       try {
         const refreshToken = localStorage.getItem('refreshToken')
-        const response = await axios.post('/api/auth/refresh', {
+        const response = await axios.post(`${api.defaults.baseURL}/auth/refresh`, {
           refreshToken,
+        }, {
+          baseURL: api.defaults.baseURL
         })
 
         const { accessToken } = response.data

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { projectApi } from '../services/api'
-import { Project } from '../types'
 import {
   FolderKanban,
   CheckSquare,
@@ -19,8 +18,6 @@ import Badge from '../components/ui/Badge'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import Skeleton from '../components/ui/Skeleton'
 import {
-  LineChart,
-  Line,
   BarChart,
   Bar,
   XAxis,
@@ -33,7 +30,7 @@ import {
   Pie,
   Cell,
 } from 'recharts'
-import { formatPersianDate, formatRialSimple } from '../utils/dateUtils'
+import { formatPersianDate } from '../utils/dateUtils'
 import { useI18nStore } from '../store/i18nStore'
 
 export default function Dashboard() {

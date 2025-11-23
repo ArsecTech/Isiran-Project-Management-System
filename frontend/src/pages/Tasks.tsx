@@ -1,18 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import {
   Plus,
   Search,
-  Filter,
   List,
   Kanban,
   Calendar,
-  MoreVertical,
   Edit,
   Trash2,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
 } from 'lucide-react'
 import { taskApi, projectApi } from '../services/api'
 import { Task, Project, TaskStatus, TaskPriority } from '../types'
@@ -22,9 +16,8 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
-import LoadingSpinner from '../components/ui/LoadingSpinner'
 import Skeleton from '../components/ui/Skeleton'
-import { formatPersianDate, formatRialSimple } from '../utils/dateUtils'
+import { formatPersianDate } from '../utils/dateUtils'
 import { useI18nStore } from '../store/i18nStore'
 import PersianDatePicker from '../components/ui/PersianDatePicker'
 
@@ -42,7 +35,6 @@ export default function Tasks() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const { showToast } = useUIStore()
   const { t, isRTL } = useI18nStore()
-  const [searchParams, setSearchParams] = useSearchParams()
 
   useEffect(() => {
     loadProjects()
@@ -102,6 +94,9 @@ export default function Tasks() {
       if (data.endDate && data.endDate.trim() !== '') {
         cleanData.endDate = data.endDate
       }
+      if (data.parentTaskId !== undefined) {
+        cleanData.parentTaskId = data.parentTaskId || null
+      }
       
       // Remove null values for optional fields
       if (cleanData.description === null) delete cleanData.description
@@ -115,12 +110,12 @@ export default function Tasks() {
     }
   }
 
-  const handleDeleteTask = async (id: string) => {
+  const handleDeleteTask = async (_id: string) => {
     if (!confirm('آیا مطمئن هستید که می‌خواهید این تسک را حذف کنید؟')) {
       return
     }
     try {
-      // await taskApi.delete(id)
+      // await taskApi.delete(_id)
       showToast('تسک با موفقیت حذف شد', 'success')
       loadTasks()
     } catch (error) {
@@ -163,6 +158,64 @@ export default function Tasks() {
     }
     return true
   })
+
+  // Build hierarchical task structure for display
+  const buildTaskHierarchy = (taskList: Task[]): Task[] => {
+    const taskMap = new Map<string, Task>()
+    const rootTasks: Task[] = []
+
+    // Create map of all tasks
+    taskList.forEach(task => {
+      taskMap.set(task.id, task)
+    })
+
+    // Find root tasks (tasks without parent)
+    taskList.forEach(task => {
+      if (!task.parentTaskId || !taskMap.has(task.parentTaskId)) {
+        rootTasks.push(task)
+      }
+    })
+
+    // Sort tasks: root tasks first, then by displayOrder
+    const sortTasks = (taskList: Task[]): Task[] => {
+      const sorted = [...taskList].sort((a, b) => a.displayOrder - b.displayOrder)
+      const result: Task[] = []
+      
+      sorted.forEach(task => {
+        result.push(task)
+        const children = taskList.filter(t => t.parentTaskId === task.id)
+        if (children.length > 0) {
+          result.push(...sortTasks(children))
+        }
+      })
+      
+      return result
+    }
+
+    return sortTasks(rootTasks)
+  }
+
+  const hierarchicalTasks = buildTaskHierarchy(filteredTasks)
+
+  // Calculate task level for display
+  const getTaskLevel = (task: Task): number => {
+    let level = 0
+    let currentTask = task
+    const visited = new Set<string>()
+    
+    while (currentTask.parentTaskId && !visited.has(currentTask.id)) {
+      visited.add(currentTask.id)
+      const parent = tasks.find(t => t.id === currentTask.parentTaskId)
+      if (parent) {
+        level++
+        currentTask = parent
+      } else {
+        break
+      }
+    }
+    
+    return level
+  }
 
   const kanbanColumns = [
     { status: TaskStatus.NotStarted, labelKey: 'tasks.status.notStarted', tasks: filteredTasks.filter(t => t.status === TaskStatus.NotStarted) },
@@ -294,14 +347,30 @@ export default function Tasks() {
                     </td>
                   </tr>
                 ) : (
-                  filteredTasks.map((task) => (
+                  hierarchicalTasks.map((task) => {
+                    const level = getTaskLevel(task)
+                    return (
                     <tr key={task.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
-                        <div>
-                          <p className="font-medium text-gray-900">{task.name}</p>
-                          {task.description && (
-                            <p className="text-sm text-gray-500 mt-1">{task.description}</p>
+                        <div className={`flex items-start gap-2 ${isRTL ? 'flex-row-reverse' : ''}`} style={{ paddingLeft: isRTL ? 0 : `${level * 24}px`, paddingRight: isRTL ? `${level * 24}px` : 0 }}>
+                          {level > 0 && (
+                            <span className="text-gray-400 text-xs mt-1">
+                              └
+                            </span>
                           )}
+                          <div className="flex-1">
+                            <p className={`font-medium text-gray-900 ${level > 0 ? 'text-sm' : ''}`}>
+                              {task.name}
+                              {level > 0 && (
+                                <span className={`${isRTL ? 'mr-2' : 'ml-2'} text-xs text-gray-400`}>
+                                  ({t('tasks.level')} {level + 1})
+                                </span>
+                              )}
+                            </p>
+                            {task.description && (
+                              <p className="text-sm text-gray-500 mt-1">{task.description}</p>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
@@ -329,7 +398,8 @@ export default function Tasks() {
                         </div>
                       </td>
                     </tr>
-                  ))
+                    )
+                  })
                 )}
               </tbody>
             </table>
@@ -399,6 +469,7 @@ export default function Tasks() {
         <TaskForm
           task={selectedTask}
           projects={projects}
+          tasks={tasks}
           onSubmit={(data) => {
             if (selectedTask) {
               handleUpdateTask(selectedTask.id, data)
@@ -420,21 +491,52 @@ export default function Tasks() {
 interface TaskFormProps {
   task?: Task | null
   projects: Project[]
+  tasks: Task[]
   onSubmit: (data: Partial<Task>) => void
   onCancel: () => void
 }
 
-function TaskForm({ task, projects, onSubmit, onCancel }: TaskFormProps) {
+function TaskForm({ task, projects, tasks, onSubmit, onCancel }: TaskFormProps) {
   const { t, isRTL } = useI18nStore()
   const [formData, setFormData] = useState({
     name: task?.name || '',
     description: task?.description || '',
     projectId: task?.projectId || projects[0]?.id || '',
+    parentTaskId: task?.parentTaskId || '',
     status: task?.status ?? TaskStatus.NotStarted,
     priority: task?.priority ?? TaskPriority.Medium,
     startDate: task?.startDate ? new Date(task.startDate).toISOString().split('T')[0] : '',
     endDate: task?.endDate ? new Date(task.endDate).toISOString().split('T')[0] : '',
   })
+
+  // Get available parent tasks (tasks from the same project, excluding current task and its descendants)
+  const getAvailableParentTasks = () => {
+    if (!formData.projectId) return []
+    
+    const projectTasks = tasks.filter(t => t.projectId === formData.projectId)
+    
+    // If editing, exclude current task and all its descendants
+    if (task) {
+      const excludeIds = new Set<string>([task.id])
+      
+      // Recursively find all descendants
+      const findDescendants = (taskId: string) => {
+        projectTasks.forEach(t => {
+          if (t.parentTaskId === taskId && !excludeIds.has(t.id)) {
+            excludeIds.add(t.id)
+            findDescendants(t.id)
+          }
+        })
+      }
+      findDescendants(task.id)
+      
+      return projectTasks.filter(t => !excludeIds.has(t.id))
+    }
+    
+    return projectTasks
+  }
+
+  const availableParentTasks = getAvailableParentTasks()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -450,6 +552,11 @@ function TaskForm({ task, projects, onSubmit, onCancel }: TaskFormProps) {
     if (formData.startDate) cleanData.startDate = formData.startDate
     if (formData.endDate && formData.endDate.trim() !== '') {
       cleanData.endDate = formData.endDate
+    }
+    if (formData.parentTaskId) {
+      cleanData.parentTaskId = formData.parentTaskId
+    } else if (formData.parentTaskId === '') {
+      cleanData.parentTaskId = null
     }
     
     onSubmit(cleanData)
@@ -484,7 +591,9 @@ function TaskForm({ task, projects, onSubmit, onCancel }: TaskFormProps) {
           </label>
           <select
             value={formData.projectId}
-            onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
+            onChange={(e) => {
+              setFormData({ ...formData, projectId: e.target.value, parentTaskId: '' })
+            }}
             required
             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
             dir={isRTL ? 'rtl' : 'ltr'}
@@ -493,6 +602,26 @@ function TaskForm({ task, projects, onSubmit, onCancel }: TaskFormProps) {
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
                 {project.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {t('tasks.parentTask')}
+          </label>
+          <select
+            value={formData.parentTaskId}
+            onChange={(e) => setFormData({ ...formData, parentTaskId: e.target.value })}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            dir={isRTL ? 'rtl' : 'ltr'}
+            disabled={!formData.projectId}
+          >
+            <option value="">{t('tasks.noParentTask')}</option>
+            {availableParentTasks.map((parentTask) => (
+              <option key={parentTask.id} value={parentTask.id}>
+                {parentTask.name}
               </option>
             ))}
           </select>

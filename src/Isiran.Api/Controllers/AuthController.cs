@@ -22,12 +22,27 @@ public class AuthController : ControllerBase
     {
         try
         {
+            _logger.LogInformation("Login request received for username: {Username}", command.Username);
+            
+            if (string.IsNullOrWhiteSpace(command.Username) || string.IsNullOrWhiteSpace(command.Password))
+            {
+                _logger.LogWarning("Login attempt with empty username or password");
+                return BadRequest(new { error = "Username and password are required" });
+            }
+            
             var result = await _mediator.Send(command);
+            _logger.LogInformation("Login successful for username: {Username}", command.Username);
             return Ok(result);
         }
         catch (UnauthorizedAccessException ex)
         {
+            _logger.LogWarning("Unauthorized login attempt: {Message}", ex.Message);
             return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during login for username: {Username}", command.Username);
+            return StatusCode(500, new { error = "An error occurred during login. Please try again later." });
         }
     }
 

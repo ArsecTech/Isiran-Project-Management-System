@@ -130,11 +130,10 @@ const translations: Translations = {
   'timeTracking.noEntries': { fa: 'ثبت زمانی یافت نشد', en: 'No time entries found' },
   'timeTracking.createNew': { fa: 'ایجاد ثبت جدید', en: 'Create New Entry' },
   
-  // Tasks
-  'tasks.create': { fa: 'تسک جدید', en: 'New Task' },
-  'tasks.edit': { fa: 'ویرایش تسک', en: 'Edit Task' },
-  'tasks.selectProject': { fa: 'انتخاب پروژه', en: 'Select Project' },
-  'tasks.selectProjectFirst': { fa: 'ابتدا پروژه را انتخاب کنید', en: 'Please select a project first' },
+  // Tasks (additional)
+  'tasks.parentTask': { fa: 'تسک والد', en: 'Parent Task' },
+  'tasks.noParentTask': { fa: 'بدون تسک والد (تسک اصلی)', en: 'No Parent Task (Main Task)' },
+  'tasks.level': { fa: 'سطح', en: 'Level' },
   'tasks.notStarted': { fa: 'شروع نشده', en: 'Not Started' },
   'tasks.inProgress': { fa: 'در حال انجام', en: 'In Progress' },
   'tasks.completed': { fa: 'تکمیل شده', en: 'Completed' },
@@ -145,17 +144,11 @@ const translations: Translations = {
   'tasks.high': { fa: 'بالا', en: 'High' },
   'tasks.critical': { fa: 'بحرانی', en: 'Critical' },
   
-  // Projects
-  'projects.create': { fa: 'پروژه جدید', en: 'New Project' },
+  // Projects (additional)
   'projects.edit': { fa: 'ویرایش پروژه', en: 'Edit Project' },
   'projects.code': { fa: 'کد پروژه', en: 'Project Code' },
   'projects.viewAll': { fa: 'مشاهده همه', en: 'View All' },
   'projects.recentProjects': { fa: 'پروژه\u200cهای اخیر', en: 'Recent Projects' },
-  'projects.noProjects': { fa: 'پروژه\u200cای یافت نشد', en: 'No projects found' },
-  'projects.createNew': { fa: 'ایجاد پروژه جدید', en: 'Create New Project' },
-  'projects.progress': { fa: 'پیشرفت', en: 'Progress' },
-  'projects.budget': { fa: 'بودجه', en: 'Budget' },
-  'projects.tasks': { fa: 'تسک\u200cها', en: 'Tasks' },
   'projects.resources': { fa: 'منابع', en: 'Resources' },
   'projects.timeline': { fa: 'زمان\u200cبندی', en: 'Timeline' },
   'projects.overview': { fa: 'نمای کلی', en: 'Overview' },

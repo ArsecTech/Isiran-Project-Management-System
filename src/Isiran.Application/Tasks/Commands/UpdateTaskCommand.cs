@@ -13,5 +13,6 @@ public class UpdateTaskCommand : IRequest<Unit>
     public DateTime? EndDate { get; set; }
     public int? Duration { get; set; }
     public Guid? AssignedToId { get; set; }
+    public Guid? ParentTaskId { get; set; }
 }
 
