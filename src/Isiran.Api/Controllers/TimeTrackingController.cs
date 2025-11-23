@@ -27,6 +27,7 @@ public class TimeTrackingController : ControllerBase
         [FromQuery] int pageSize = 10,
         [FromQuery] Guid? taskId = null,
         [FromQuery] Guid? resourceId = null,
+        [FromQuery] Guid? projectId = null,
         [FromQuery] DateTime? startDate = null,
         [FromQuery] DateTime? endDate = null)
     {
@@ -36,6 +37,7 @@ public class TimeTrackingController : ControllerBase
             PageSize = pageSize,
             TaskId = taskId,
             ResourceId = resourceId,
+            ProjectId = projectId,
             StartDate = startDate,
             EndDate = endDate
         };

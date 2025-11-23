@@ -8,6 +8,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Remove="appsettings.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="appsettings.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Isiran.Application\Isiran.Application.csproj" />
     <ProjectReference Include="..\Isiran.Infrastructure\Isiran.Infrastructure.csproj" />
     <ProjectReference Include="..\Isiran.GanttEngine\Isiran.GanttEngine.csproj" />

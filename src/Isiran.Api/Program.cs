@@ -25,6 +25,7 @@ builder.Services.AddScoped<DbContext>(sp => sp.GetRequiredService<ApplicationDbC
 // Repositories
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddScoped<Isiran.Core.Interfaces.IUserRepository, Isiran.Infrastructure.Persistence.Repositories.UserRepository>();
+builder.Services.AddScoped<IRepository<Isiran.Domain.Tasks.TaskTimeEntry>, Isiran.Infrastructure.Persistence.Repositories.TaskTimeEntryRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // MediatR
