@@ -52,49 +52,31 @@ public class ResourceConfiguration : IEntityTypeConfiguration<Resource>
         builder.OwnsOne(r => r.Calendar, calendar =>
         {
             calendar.Property(c => c.CalendarId)
+                .HasColumnName("CalendarId")
                 .HasMaxLength(100)
                 .HasDefaultValue("Standard");
             
             calendar.Property(c => c.WorkingHoursPerDay)
+                .HasColumnName("WorkingHoursPerDay")
                 .HasDefaultValue(8);
             
             calendar.Property(c => c.WorkingDaysPerWeek)
+                .HasColumnName("WorkingDaysPerWeek")
                 .HasDefaultValue(5);
             
-            // Configure collections to be stored as JSON
-            calendar.Property(c => c.WorkingDays)
-                .HasConversion(
-                    v => string.Join(",", v.Select(d => ((int)d).ToString())),
-                    v => string.IsNullOrEmpty(v) 
-                        ? new List<DayOfWeek>() 
-                        : v.Split(new[] { "," }, StringSplitOptions.None)
-                            .Select(s => (DayOfWeek)int.Parse(s))
-                            .ToList())
-                .HasColumnType("nvarchar(max)");
-            
-            calendar.Property(c => c.Holidays)
-                .HasConversion(
-                    v => string.Join(",", v.Select(d => d.ToString("O"))),
-                    v => string.IsNullOrEmpty(v)
-                        ? new List<DateTime>()
-                        : v.Split(new[] { "," }, StringSplitOptions.None)
-                            .Select(s => DateTime.Parse(s))
-                            .ToList())
-                .HasColumnType("nvarchar(max)");
-            
-            calendar.Property(c => c.TimeOff)
-                .HasConversion(
-                    v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
-                    v => string.IsNullOrEmpty(v)
-                        ? new List<DateTimeRange>()
-                        : System.Text.Json.JsonSerializer.Deserialize<List<DateTimeRange>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new List<DateTimeRange>())
-                .HasColumnType("nvarchar(max)");
+            // Configure collections to be stored as JSON or ignore if not in database
+            calendar.Ignore(c => c.WorkingDays);
+            calendar.Ignore(c => c.Holidays);
+            calendar.Ignore(c => c.TimeOff);
         });
 
         builder.HasOne(r => r.Manager)
-            .WithMany()
+            .WithMany(r => r.TeamMembers)
             .HasForeignKey(r => r.ManagerId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        // Navigation properties are configured in their respective entity configurations
+        // (TaskResource and ProjectResource) to avoid circular references
 
         builder.HasIndex(r => r.Email)
             .IsUnique();

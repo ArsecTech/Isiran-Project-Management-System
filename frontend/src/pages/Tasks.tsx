@@ -24,7 +24,9 @@ import Input from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import Skeleton from '../components/ui/Skeleton'
-import { format } from 'date-fns'
+import { formatPersianDate, formatRialSimple } from '../utils/dateUtils'
+import { useI18nStore } from '../store/i18nStore'
+import PersianDatePicker from '../components/ui/PersianDatePicker'
 
 type ViewMode = 'list' | 'kanban' | 'calendar'
 
@@ -39,6 +41,7 @@ export default function Tasks() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const { showToast } = useUIStore()
+  const { t, isRTL } = useI18nStore()
   const [searchParams, setSearchParams] = useSearchParams()
 
   useEffect(() => {
@@ -51,7 +54,7 @@ export default function Tasks() {
       const response = await projectApi.getAll({ pageSize: 100 })
       setProjects(response.data.items)
     } catch (error) {
-      showToast('خطا در بارگذاری پروژه‌ها', 'error')
+      showToast(isRTL ? 'خطا در بارگذاری پروژه‌ها' : 'Failed to load projects', 'error')
     }
   }
 
@@ -67,7 +70,7 @@ export default function Tasks() {
       setTasks(response.data.items || [])
     } catch (error: any) {
       console.error('Failed to load tasks:', error)
-      const errorMessage = error.response?.data?.error || 'خطا در بارگذاری تسک‌ها'
+      const errorMessage = error.response?.data?.error || (isRTL ? 'خطا در بارگذاری تسک‌ها' : 'Failed to load tasks')
       showToast(errorMessage, 'error')
       setTasks([])
     } finally {
@@ -78,22 +81,37 @@ export default function Tasks() {
   const handleCreateTask = async (data: Partial<Task>) => {
     try {
       await taskApi.create(data)
-      showToast('تسک با موفقیت ایجاد شد', 'success')
+      showToast(isRTL ? 'تسک با موفقیت ایجاد شد' : 'Task created successfully', 'success')
       setShowCreateModal(false)
       loadTasks()
     } catch (error) {
-      showToast('خطا در ایجاد تسک', 'error')
+      showToast(isRTL ? 'خطا در ایجاد تسک' : 'Failed to create task', 'error')
     }
   }
 
   const handleUpdateTask = async (id: string, data: Partial<Task>) => {
     try {
-      await taskApi.update(id, data)
-      showToast('تسک با موفقیت به‌روزرسانی شد', 'success')
+      // Clean up data: remove empty strings and convert to proper types
+      const cleanData: any = {}
+      
+      if (data.name) cleanData.name = data.name
+      if (data.description !== undefined) cleanData.description = data.description || null
+      if (data.priority !== undefined) cleanData.priority = data.priority
+      if (data.status !== undefined) cleanData.status = data.status
+      if (data.startDate) cleanData.startDate = data.startDate
+      if (data.endDate && data.endDate.trim() !== '') {
+        cleanData.endDate = data.endDate
+      }
+      
+      // Remove null values for optional fields
+      if (cleanData.description === null) delete cleanData.description
+      
+      await taskApi.update(id, cleanData)
+      showToast(isRTL ? 'تسک با موفقیت به‌روزرسانی شد' : 'Task updated successfully', 'success')
       setSelectedTask(null)
       loadTasks()
     } catch (error) {
-      showToast('خطا در به‌روزرسانی تسک', 'error')
+      showToast(isRTL ? 'خطا در به‌روزرسانی تسک' : 'Failed to update task', 'error')
     }
   }
 
@@ -112,25 +130,25 @@ export default function Tasks() {
 
   const getStatusBadge = (status: TaskStatus) => {
     const statusMap = {
-      [TaskStatus.NotStarted]: { label: 'شروع نشده', variant: 'default' as const },
-      [TaskStatus.InProgress]: { label: 'در حال انجام', variant: 'info' as const },
-      [TaskStatus.Completed]: { label: 'تکمیل شده', variant: 'success' as const },
-      [TaskStatus.OnHold]: { label: 'متوقف', variant: 'warning' as const },
-      [TaskStatus.Cancelled]: { label: 'لغو شده', variant: 'danger' as const },
+      [TaskStatus.NotStarted]: { labelKey: 'tasks.status.notStarted', variant: 'default' as const },
+      [TaskStatus.InProgress]: { labelKey: 'tasks.status.inProgress', variant: 'info' as const },
+      [TaskStatus.Completed]: { labelKey: 'tasks.status.completed', variant: 'success' as const },
+      [TaskStatus.OnHold]: { labelKey: 'tasks.status.onHold', variant: 'warning' as const },
+      [TaskStatus.Cancelled]: { labelKey: 'tasks.status.cancelled', variant: 'danger' as const },
     }
     const statusInfo = statusMap[status] || statusMap[TaskStatus.NotStarted]
-    return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+    return <Badge variant={statusInfo.variant}>{t(statusInfo.labelKey)}</Badge>
   }
 
   const getPriorityBadge = (priority: TaskPriority) => {
     const priorityMap = {
-      [TaskPriority.Low]: { label: 'کم', variant: 'default' as const },
-      [TaskPriority.Medium]: { label: 'متوسط', variant: 'info' as const },
-      [TaskPriority.High]: { label: 'بالا', variant: 'warning' as const },
-      [TaskPriority.Critical]: { label: 'بحرانی', variant: 'danger' as const },
+      [TaskPriority.Low]: { labelKey: 'tasks.priority.low', variant: 'default' as const },
+      [TaskPriority.Medium]: { labelKey: 'tasks.priority.medium', variant: 'info' as const },
+      [TaskPriority.High]: { labelKey: 'tasks.priority.high', variant: 'warning' as const },
+      [TaskPriority.Critical]: { labelKey: 'tasks.priority.critical', variant: 'danger' as const },
     }
     const priorityInfo = priorityMap[priority] || priorityMap[TaskPriority.Medium]
-    return <Badge variant={priorityInfo.variant}>{priorityInfo.label}</Badge>
+    return <Badge variant={priorityInfo.variant}>{t(priorityInfo.labelKey)}</Badge>
   }
 
   const filteredTasks = tasks.filter((task) => {
@@ -147,35 +165,40 @@ export default function Tasks() {
   })
 
   const kanbanColumns = [
-    { status: TaskStatus.NotStarted, label: 'شروع نشده', tasks: filteredTasks.filter(t => t.status === TaskStatus.NotStarted) },
-    { status: TaskStatus.InProgress, label: 'در حال انجام', tasks: filteredTasks.filter(t => t.status === TaskStatus.InProgress) },
-    { status: TaskStatus.Completed, label: 'تکمیل شده', tasks: filteredTasks.filter(t => t.status === TaskStatus.Completed) },
-    { status: TaskStatus.OnHold, label: 'متوقف', tasks: filteredTasks.filter(t => t.status === TaskStatus.OnHold) },
+    { status: TaskStatus.NotStarted, labelKey: 'tasks.status.notStarted', tasks: filteredTasks.filter(t => t.status === TaskStatus.NotStarted) },
+    { status: TaskStatus.InProgress, labelKey: 'tasks.status.inProgress', tasks: filteredTasks.filter(t => t.status === TaskStatus.InProgress) },
+    { status: TaskStatus.Completed, labelKey: 'tasks.status.completed', tasks: filteredTasks.filter(t => t.status === TaskStatus.Completed) },
+    { status: TaskStatus.OnHold, labelKey: 'tasks.status.onHold', tasks: filteredTasks.filter(t => t.status === TaskStatus.OnHold) },
   ]
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${isRTL ? 'rtl' : 'ltr'}`} dir={isRTL ? 'rtl' : 'ltr'}>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">تسک‌ها</h1>
-          <p className="text-gray-600 mt-2">مدیریت و پیگیری تسک‌های پروژه</p>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+            {t('tasks.title')}
+          </h1>
+          <p className="text-gray-600 mt-2">
+            {isRTL ? 'مدیریت و پیگیری تسک‌های پروژه' : 'Manage and track project tasks'}
+          </p>
         </div>
         <Button
           onClick={() => setShowCreateModal(true)}
           leftIcon={<Plus className="w-5 h-5" />}
+          className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 shadow-lg hover:shadow-xl transform hover:scale-105"
         >
-          تسک جدید
+          {t('tasks.create')}
         </Button>
       </div>
 
       {/* Filters and View Toggle */}
-      <Card className="p-4">
-        <div className="flex flex-col lg:flex-row gap-4">
+      <Card className="p-4 bg-gradient-to-br from-white to-gray-50/50">
+        <div className={`flex flex-col lg:flex-row gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
           {/* Search */}
           <div className="flex-1">
             <Input
-              placeholder="جستجو در تسک‌ها..."
+              placeholder={t('tasks.search')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               leftIcon={<Search className="w-4 h-4" />}
@@ -183,13 +206,14 @@ export default function Tasks() {
           </div>
 
           {/* Filters */}
-          <div className="flex gap-2">
+          <div className={`flex gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
             <select
               value={selectedProject}
               onChange={(e) => setSelectedProject(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+              dir={isRTL ? 'rtl' : 'ltr'}
             >
-              <option value="all">همه پروژه‌ها</option>
+              <option value="all">{t('tasks.allProjects')}</option>
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
@@ -200,34 +224,35 @@ export default function Tasks() {
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+              dir={isRTL ? 'rtl' : 'ltr'}
             >
-              <option value="all">همه وضعیت‌ها</option>
-              <option value={TaskStatus.NotStarted}>شروع نشده</option>
-              <option value={TaskStatus.InProgress}>در حال انجام</option>
-              <option value={TaskStatus.Completed}>تکمیل شده</option>
-              <option value={TaskStatus.OnHold}>متوقف</option>
-              <option value={TaskStatus.Cancelled}>لغو شده</option>
+              <option value="all">{t('tasks.allStatuses')}</option>
+              <option value={TaskStatus.NotStarted}>{t('tasks.status.notStarted')}</option>
+              <option value={TaskStatus.InProgress}>{t('tasks.status.inProgress')}</option>
+              <option value={TaskStatus.Completed}>{t('tasks.status.completed')}</option>
+              <option value={TaskStatus.OnHold}>{t('tasks.status.onHold')}</option>
+              <option value={TaskStatus.Cancelled}>{t('tasks.status.cancelled')}</option>
             </select>
           </div>
 
           {/* View Toggle */}
-          <div className="flex gap-2 border border-gray-200 rounded-lg p-1">
+          <div className={`flex gap-2 border border-gray-200 rounded-xl p-1 bg-white ${isRTL ? 'flex-row-reverse' : ''}`}>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded ${viewMode === 'list' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <List className="w-5 h-5" />
             </button>
             <button
               onClick={() => setViewMode('kanban')}
-              className={`p-2 rounded ${viewMode === 'kanban' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`p-2 rounded-lg transition-all ${viewMode === 'kanban' ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <Kanban className="w-5 h-5" />
             </button>
             <button
               onClick={() => setViewMode('calendar')}
-              className={`p-2 rounded ${viewMode === 'calendar' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`p-2 rounded-lg transition-all ${viewMode === 'calendar' ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <Calendar className="w-5 h-5" />
             </button>
@@ -246,21 +271,26 @@ export default function Tasks() {
         <Card className="p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تسک</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">پروژه</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">وضعیت</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">اولویت</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاریخ</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">عملیات</th>
+                  <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('tasks.name')}</th>
+                  <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('tasks.project')}</th>
+                  <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('tasks.status')}</th>
+                  <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('tasks.priority')}</th>
+                  <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('tasks.startDate')}</th>
+                  <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('common.edit')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredTasks.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                      تسکی یافت نشد
+                    <td colSpan={6} className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center gap-2">
+                        <p className="text-gray-500 text-lg font-medium">{t('tasks.noTasks')}</p>
+                        <Button onClick={() => setShowCreateModal(true)} variant="outline" size="sm">
+                          {t('tasks.createNew')}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -280,19 +310,19 @@ export default function Tasks() {
                       <td className="px-6 py-4">{getStatusBadge(task.status)}</td>
                       <td className="px-6 py-4">{getPriorityBadge(task.priority)}</td>
                       <td className="px-6 py-4 text-sm text-gray-600">
-                        {task.startDate ? format(new Date(task.startDate), 'yyyy/MM/dd') : '-'}
+                        {task.startDate ? formatPersianDate(task.startDate) : '-'}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
+                        <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
                           <button
                             onClick={() => setSelectedTask(task)}
-                            className="p-2 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                            className="p-2 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all transform hover:scale-110"
                           >
                             <Edit className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDeleteTask(task.id)}
-                            className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all transform hover:scale-110"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -308,21 +338,21 @@ export default function Tasks() {
       ) : viewMode === 'kanban' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {kanbanColumns.map((column) => (
-            <Card key={column.status} className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-gray-900">{column.label}</h3>
+            <Card key={column.status} className="p-4 bg-gradient-to-br from-white to-gray-50/50">
+              <div className={`flex items-center justify-between mb-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                <h3 className="font-semibold text-gray-900">{t(column.labelKey)}</h3>
                 <Badge variant="default">{column.tasks.length}</Badge>
               </div>
               <div className="space-y-3 max-h-[600px] overflow-y-auto scrollbar-thin">
                 {column.tasks.length === 0 ? (
                   <div className="text-center py-8 text-gray-400 text-sm">
-                    تسکی وجود ندارد
+                    {t('tasks.noTasks')}
                   </div>
                 ) : (
                   column.tasks.map((task) => (
-                    <Card
+                    <div
                       key={task.id}
-                      className="p-4 hover:shadow-md transition-shadow cursor-pointer"
+                      className="p-4 hover:shadow-md transition-shadow cursor-pointer border border-gray-200 rounded-lg bg-white"
                       onClick={() => setSelectedTask(task)}
                     >
                       <div className="flex items-start justify-between mb-2">
@@ -337,10 +367,10 @@ export default function Tasks() {
                       <div className="flex items-center justify-between text-xs text-gray-500">
                         <span>{projects.find(p => p.id === task.projectId)?.name || '-'}</span>
                         {task.startDate && (
-                          <span>{format(new Date(task.startDate), 'MM/dd')}</span>
+                          <span>{formatPersianDate(task.startDate).split('/').slice(1).join('/')}</span>
                         )}
                       </div>
-                    </Card>
+                    </div>
                   ))
                 )}
               </div>
@@ -348,9 +378,11 @@ export default function Tasks() {
           ))}
         </div>
       ) : (
-        <Card className="p-12 text-center">
+        <Card className="p-12 text-center bg-gradient-to-br from-white to-gray-50/50">
           <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500">نمای تقویمی به زودی اضافه خواهد شد</p>
+          <p className="text-gray-500 text-lg font-medium">
+            {isRTL ? 'نمای تقویمی به زودی اضافه خواهد شد' : 'Calendar view coming soon'}
+          </p>
         </Card>
       )}
 
@@ -361,7 +393,7 @@ export default function Tasks() {
           setShowCreateModal(false)
           setSelectedTask(null)
         }}
-        title={selectedTask ? 'ویرایش تسک' : 'تسک جدید'}
+        title={selectedTask ? t('tasks.edit') : t('tasks.create')}
         size="lg"
       >
         <TaskForm
@@ -393,25 +425,40 @@ interface TaskFormProps {
 }
 
 function TaskForm({ task, projects, onSubmit, onCancel }: TaskFormProps) {
+  const { t, isRTL } = useI18nStore()
   const [formData, setFormData] = useState({
     name: task?.name || '',
     description: task?.description || '',
     projectId: task?.projectId || projects[0]?.id || '',
     status: task?.status ?? TaskStatus.NotStarted,
     priority: task?.priority ?? TaskPriority.Medium,
-    startDate: task?.startDate ? format(new Date(task.startDate), 'yyyy-MM-dd') : '',
-    endDate: task?.endDate ? format(new Date(task.endDate), 'yyyy-MM-dd') : '',
+    startDate: task?.startDate ? new Date(task.startDate).toISOString().split('T')[0] : '',
+    endDate: task?.endDate ? new Date(task.endDate).toISOString().split('T')[0] : '',
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit(formData)
+    // Clean up form data before submitting
+    const cleanData: any = {
+      name: formData.name,
+      projectId: formData.projectId,
+      status: formData.status,
+      priority: formData.priority,
+    }
+    
+    if (formData.description) cleanData.description = formData.description
+    if (formData.startDate) cleanData.startDate = formData.startDate
+    if (formData.endDate && formData.endDate.trim() !== '') {
+      cleanData.endDate = formData.endDate
+    }
+    
+    onSubmit(cleanData)
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4" dir={isRTL ? 'rtl' : 'ltr'}>
       <Input
-        label="نام تسک"
+        label={t('tasks.name')}
         value={formData.name}
         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
         required
@@ -419,28 +466,30 @@ function TaskForm({ task, projects, onSubmit, onCancel }: TaskFormProps) {
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          توضیحات
+          {t('tasks.description')}
         </label>
         <textarea
           value={formData.description}
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
           rows={3}
+          dir={isRTL ? 'rtl' : 'ltr'}
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            پروژه
+            {t('tasks.project')}
           </label>
           <select
             value={formData.projectId}
             onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
             required
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            dir={isRTL ? 'rtl' : 'ltr'}
           >
-            <option value="">انتخاب پروژه</option>
+            <option value="">{t('tasks.selectProject')}</option>
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
                 {project.name}
@@ -451,42 +500,62 @@ function TaskForm({ task, projects, onSubmit, onCancel }: TaskFormProps) {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            وضعیت
+            {t('tasks.status')}
           </label>
           <select
             value={formData.status}
             onChange={(e) => setFormData({ ...formData, status: parseInt(e.target.value) })}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            dir={isRTL ? 'rtl' : 'ltr'}
           >
-            <option value={TaskStatus.NotStarted}>شروع نشده</option>
-            <option value={TaskStatus.InProgress}>در حال انجام</option>
-            <option value={TaskStatus.Completed}>تکمیل شده</option>
-            <option value={TaskStatus.OnHold}>متوقف</option>
-            <option value={TaskStatus.Cancelled}>لغو شده</option>
+            <option value={TaskStatus.NotStarted}>{t('tasks.status.notStarted')}</option>
+            <option value={TaskStatus.InProgress}>{t('tasks.status.inProgress')}</option>
+            <option value={TaskStatus.Completed}>{t('tasks.status.completed')}</option>
+            <option value={TaskStatus.OnHold}>{t('tasks.status.onHold')}</option>
+            <option value={TaskStatus.Cancelled}>{t('tasks.status.cancelled')}</option>
           </select>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <Input
-          label="تاریخ شروع"
-          type="date"
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {t('tasks.priority')}
+          </label>
+          <select
+            value={formData.priority}
+            onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) })}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            dir={isRTL ? 'rtl' : 'ltr'}
+          >
+            <option value={TaskPriority.Low}>{t('tasks.priority.low')}</option>
+            <option value={TaskPriority.Medium}>{t('tasks.priority.medium')}</option>
+            <option value={TaskPriority.High}>{t('tasks.priority.high')}</option>
+            <option value={TaskPriority.Critical}>{t('tasks.priority.critical')}</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <PersianDatePicker
+          label={t('tasks.startDate')}
           value={formData.startDate}
-          onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+          onChange={(value) => setFormData({ ...formData, startDate: value })}
         />
-        <Input
-          label="تاریخ پایان"
-          type="date"
+        <PersianDatePicker
+          label={t('tasks.endDate')}
           value={formData.endDate}
-          onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+          onChange={(value) => setFormData({ ...formData, endDate: value })}
         />
       </div>
 
-      <div className="flex items-center justify-end gap-3 pt-4">
+      <div className={`flex items-center ${isRTL ? 'justify-start flex-row-reverse' : 'justify-end'} gap-3 pt-4`}>
         <Button type="button" variant="outline" onClick={onCancel}>
-          انصراف
+          {t('common.cancel')}
         </Button>
-        <Button type="submit">ذخیره</Button>
+        <Button type="submit" className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800">
+          {t('common.save')}
+        </Button>
       </div>
     </form>
   )

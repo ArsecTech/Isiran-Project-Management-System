@@ -32,12 +32,28 @@ public class UpdateTaskCommandHandler : IRequestHandler<UpdateTaskCommand, Unit>
             throw new NotFoundException($"Task with ID {request.Id} not found.");
         }
 
+        // Update basic details
+        var startDate = request.StartDate ?? task.StartDate;
+        var duration = request.Duration;
+        
+        // If endDate is provided, calculate duration from startDate
+        if (request.EndDate.HasValue && startDate.HasValue)
+        {
+            duration = (int)(request.EndDate.Value - startDate.Value).TotalDays + 1;
+            if (duration <= 0) duration = 1;
+        }
+        
         task.UpdateDetails(
             request.Name,
             request.Description,
             request.Priority,
-            request.StartDate,
-            request.Duration);
+            startDate,
+            duration);
+
+        if (request.Status.HasValue)
+        {
+            task.ChangeStatus(request.Status.Value);
+        }
 
         if (request.AssignedToId.HasValue)
         {

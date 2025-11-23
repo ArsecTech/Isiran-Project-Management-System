@@ -16,22 +16,26 @@ import {
 import { useState, useRef, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { useUIStore } from '../store/uiStore'
+import { useI18nStore } from '../store/i18nStore'
 import ToastContainer from './ui/ToastContainer'
+import Logo from './ui/Logo'
+import LanguageSwitcher from './ui/LanguageSwitcher'
 
 export default function Layout() {
   const { sidebarOpen, toggleSidebar, setSidebarOpen, toasts, removeToast } = useUIStore()
   const { user, logout } = useAuthStore()
+  const { t, isRTL } = useI18nStore()
   const location = useLocation()
   const navigate = useNavigate()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
 
   const navItems = [
-    { path: '/app/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/app/projects', icon: FolderKanban, label: 'Projects' },
-    { path: '/app/tasks', icon: CheckSquare, label: 'Tasks' },
-    { path: '/app/resources', icon: Users, label: 'Resources' },
-    { path: '/app/time-tracking', icon: Clock, label: 'Time Tracking' },
+    { path: '/app/dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard' },
+    { path: '/app/projects', icon: FolderKanban, labelKey: 'nav.projects' },
+    { path: '/app/tasks', icon: CheckSquare, labelKey: 'nav.tasks' },
+    { path: '/app/resources', icon: Users, labelKey: 'nav.resources' },
+    { path: '/app/time-tracking', icon: Clock, labelKey: 'nav.timeTracking' },
   ]
 
   const handleLogout = () => {
@@ -55,23 +59,15 @@ export default function Layout() {
   }, [])
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className={`flex h-screen bg-gray-50 overflow-hidden ${isRTL ? 'rtl' : 'ltr'}`} dir={isRTL ? 'rtl' : 'ltr'}>
       {/* Sidebar */}
       <aside
         className={`${
           sidebarOpen ? 'w-64' : 'w-0'
-        } bg-gradient-to-b from-gray-900 to-gray-800 text-white transition-all duration-300 overflow-hidden flex flex-col fixed lg:relative h-full z-40`}
+        } bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white transition-all duration-300 overflow-hidden flex flex-col fixed lg:relative h-full z-40 shadow-2xl`}
       >
-        <div className="p-6 border-b border-gray-700">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-xl">I</span>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-white">Isiran</h1>
-              <p className="text-xs text-gray-400">Project Management</p>
-            </div>
-          </div>
+        <div className="p-6 border-b border-gray-700/50">
+          <Logo size="md" showText={true} className="text-white" />
         </div>
 
         <nav className="flex-1 mt-4 px-2 sm:px-3 overflow-y-auto scrollbar-thin">
@@ -89,14 +85,14 @@ export default function Layout() {
                     setSidebarOpen(false)
                   }
                 }}
-                className={`flex items-center px-3 sm:px-4 py-3 mb-1 rounded-lg text-gray-300 hover:bg-gray-800 transition-all duration-200 ${
+                className={`flex items-center px-3 sm:px-4 py-3 mb-1 rounded-xl text-gray-300 hover:bg-gray-800/50 transition-all duration-200 group ${
                   isActive
-                    ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/50'
-                    : 'hover:text-white'
+                    ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-lg shadow-primary-500/50'
+                    : 'hover:text-white hover:translate-x-1'
                 }`}
               >
-                <Icon className="w-5 h-5 mr-2 sm:mr-3 flex-shrink-0" />
-                <span className="font-medium text-sm sm:text-base">{item.label}</span>
+                <Icon className={`w-5 h-5 flex-shrink-0 ${isRTL ? 'ml-2 sm:ml-3' : 'mr-2 sm:mr-3'} ${isActive ? 'scale-110' : 'group-hover:scale-110'} transition-transform`} />
+                <span className="font-medium text-sm sm:text-base">{t(item.labelKey)}</span>
               </Link>
             )
           })}
@@ -137,29 +133,32 @@ export default function Layout() {
               )}
             </button>
 
-            <div className="flex items-center space-x-4">
+            <div className={`flex items-center ${isRTL ? 'space-x-reverse' : 'space-x-4'} gap-4`}>
+              {/* Language Switcher */}
+              <LanguageSwitcher />
+              
               {/* Notifications */}
               <button className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
                 <Bell className="w-5 h-5" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                <span className={`absolute top-1 ${isRTL ? 'left' : 'right'}-1 w-2 h-2 bg-red-500 rounded-full`}></span>
               </button>
 
               {/* User Menu */}
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="flex items-center space-x-2 px-2 sm:px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  className={`flex items-center ${isRTL ? 'space-x-reverse' : 'space-x-2'} gap-2 px-2 sm:px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors`}
                 >
-                  <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
+                  <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center shadow-md">
                     <span className="text-white text-sm font-semibold">
                       {user?.fullName?.charAt(0) || 'U'}
                     </span>
                   </div>
-                  <ChevronDown className="w-4 h-4 text-gray-600 hidden sm:block" />
+                  <ChevronDown className={`w-4 h-4 text-gray-600 hidden sm:block ${userMenuOpen ? 'rotate-180' : ''} transition-transform`} />
                 </button>
 
                 {userMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 animate-scale-in">
+                  <div className={`absolute ${isRTL ? 'left' : 'right'}-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-50 animate-scale-in`}>
                     <div className="px-4 py-3 border-b border-gray-200">
                       <p className="text-sm font-semibold text-gray-900">
                         {user?.fullName || 'User'}
@@ -170,27 +169,27 @@ export default function Layout() {
                     </div>
                     <Link
                       to="/app/settings"
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      className={`flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors ${isRTL ? 'flex-row-reverse' : ''}`}
                       onClick={() => setUserMenuOpen(false)}
                     >
-                      <Settings className="w-4 h-4 mr-3" />
-                      Settings
+                      <Settings className={`w-4 h-4 ${isRTL ? 'ml-3' : 'mr-3'}`} />
+                      {t('nav.settings')}
                     </Link>
                     <Link
                       to="/app/profile"
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      className={`flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors ${isRTL ? 'flex-row-reverse' : ''}`}
                       onClick={() => setUserMenuOpen(false)}
                     >
-                      <User className="w-4 h-4 mr-3" />
-                      Profile
+                      <User className={`w-4 h-4 ${isRTL ? 'ml-3' : 'mr-3'}`} />
+                      {t('nav.profile')}
                     </Link>
                     <div className="border-t border-gray-200 my-1"></div>
                     <button
                       onClick={handleLogout}
-                      className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      className={`w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors ${isRTL ? 'flex-row-reverse' : ''}`}
                     >
-                      <LogOut className="w-4 h-4 mr-3" />
-                      Logout
+                      <LogOut className={`w-4 h-4 ${isRTL ? 'ml-3' : 'mr-3'}`} />
+                      {t('nav.logout')}
                     </button>
                   </div>
                 )}

@@ -26,8 +26,10 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.CreatedBy, opt => opt.Ignore());
 
         // Resources
-        CreateMap<Domain.Resources.Resource, Resources.Queries.GetResourceDto>();
-        CreateMap<Domain.Resources.Resource, Resources.Queries.GetResourceListDto>();
+        CreateMap<Domain.Resources.Resource, Resources.Queries.GetResourceDto>()
+            .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.FullName));
+        CreateMap<Domain.Resources.Resource, Resources.Queries.GetResourceListDto>()
+            .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.FullName));
         CreateMap<Resources.Commands.CreateResourceCommand, Domain.Resources.Resource>();
 
         // Users

@@ -33,11 +33,13 @@ import {
   Pie,
   Cell,
 } from 'recharts'
-import { format } from 'date-fns'
+import { formatPersianDate, formatRialSimple } from '../utils/dateUtils'
+import { useI18nStore } from '../store/i18nStore'
 
 export default function Dashboard() {
   const { projects, setProjects, isLoading, setLoading } = useProjectStore()
   const { showToast } = useUIStore()
+  const { t, isRTL } = useI18nStore()
   const [chartData, setChartData] = useState<any[]>([])
 
   useEffect(() => {
@@ -48,8 +50,8 @@ export default function Dashboard() {
     if (projects.length > 0) {
       const data = projects.map((p) => ({
         name: p.name.length > 10 ? p.name.substring(0, 10) + '...' : p.name,
-        progress: p.progressPercentage,
-        tasks: p.taskCount,
+        progress: p.progressPercentage || 0,
+        tasks: p.taskCount || 0,
       }))
       setChartData(data)
     }
@@ -72,28 +74,28 @@ export default function Dashboard() {
 
   const stats = [
     {
-      label: 'کل پروژه‌ها',
+      labelKey: 'dashboard.totalProjects',
       value: projects.length,
       icon: FolderKanban,
-      color: 'bg-blue-500',
+      color: 'bg-gradient-to-br from-blue-500 to-blue-600',
       change: '+12%',
     },
     {
-      label: 'تسک‌های فعال',
-      value: projects.reduce((sum, p) => sum + p.taskCount, 0),
+      labelKey: 'dashboard.totalTasks',
+      value: projects.reduce((sum, p) => sum + (p.taskCount || 0), 0),
       icon: CheckSquare,
-      color: 'bg-green-500',
+      color: 'bg-gradient-to-br from-green-500 to-green-600',
       change: '+5%',
     },
     {
-      label: 'اعضای تیم',
-      value: 12,
+      labelKey: 'dashboard.activeProjects',
+      value: projects.filter(p => p.status === 1).length,
       icon: Users,
-      color: 'bg-purple-500',
+      color: 'bg-gradient-to-br from-purple-500 to-purple-600',
       change: '+2',
     },
     {
-      label: 'نرخ تکمیل',
+      labelKey: 'dashboard.completedTasks',
       value: `${
         projects.length > 0
           ? Math.round(
@@ -103,7 +105,7 @@ export default function Dashboard() {
           : 0
       }%`,
       icon: TrendingUp,
-      color: 'bg-orange-500',
+      color: 'bg-gradient-to-br from-orange-500 to-orange-600',
       change: '+3%',
     },
   ]
@@ -125,19 +127,21 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">داشبورد</h1>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+            {t('dashboard.title')}
+          </h1>
           <p className="text-gray-600 mt-2">
-            خوش آمدید به سیستم مدیریت پروژه Isiran
+            {isRTL ? 'خوش آمدید به سیستم مدیریت پروژه IPMS' : 'Welcome to IPMS Project Management System'}
           </p>
         </div>
         <Link
           to="/app/projects"
-          className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+          className={`flex items-center px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-xl hover:from-primary-700 hover:to-primary-800 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 ${isRTL ? 'flex-row-reverse' : ''}`}
         >
-          <Plus className="w-5 h-5 mr-2" />
-          پروژه جدید
+          <Plus className={`w-5 h-5 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+          {isRTL ? 'پروژه جدید' : 'New Project'}
         </Link>
       </div>
 
@@ -146,22 +150,22 @@ export default function Dashboard() {
         {stats.map((stat) => {
           const Icon = stat.icon
           return (
-            <Card key={stat.label} hover className="p-6">
-              <div className="flex items-center justify-between">
+            <Card key={stat.labelKey} hover className="p-6 bg-gradient-to-br from-white to-gray-50 border-gray-200 shadow-md hover:shadow-xl transition-all duration-300">
+              <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
                 <div className="flex-1">
-                  <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
-                  <div className="flex items-baseline space-x-2">
-                    <p className="text-3xl font-bold text-gray-900">
+                  <p className="text-sm text-gray-600 mb-1 font-medium">{t(stat.labelKey)}</p>
+                  <div className={`flex items-baseline ${isRTL ? 'space-x-reverse' : 'space-x-2'} gap-2`}>
+                    <p className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                       {stat.value}
                     </p>
                     {stat.change && (
-                      <span className="text-sm text-green-600 font-medium">
+                      <span className="text-sm text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded-full">
                         {stat.change}
                       </span>
                     )}
                   </div>
                 </div>
-                <div className={`${stat.color} p-3 rounded-xl shadow-lg`}>
+                <div className={`${stat.color} p-4 rounded-2xl shadow-lg transform hover:scale-110 transition-transform`}>
                   <Icon className="w-6 h-6 text-white" />
                 </div>
               </div>
@@ -187,23 +191,28 @@ export default function Dashboard() {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="progress" fill="#0ea5e9" name="پیشرفت (%)" />
+                <Bar dataKey="progress" fill="#0ea5e9" name={isRTL ? "پیشرفت (%)" : "Progress (%)"} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-gray-500 text-center py-12">
-              داده‌ای برای نمایش وجود ندارد
-            </p>
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg font-medium mb-2">
+                {t('common.noData')}
+              </p>
+              <p className="text-gray-400 text-sm">
+                {isRTL ? 'داده‌ای برای نمایش وجود ندارد' : 'No data available to display'}
+              </p>
+            </div>
           )}
         </Card>
 
         {/* Status Pie Chart */}
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            وضعیت پروژه‌ها
+        <Card className="p-6 bg-gradient-to-br from-white to-gray-50/50">
+          <h3 className="text-lg font-semibold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-4">
+            {isRTL ? 'وضعیت پروژه‌ها' : 'Project Status'}
           </h3>
           {isLoading ? (
-            <LoadingSpinner text="در حال بارگذاری..." />
+            <LoadingSpinner text={t('common.loading')} />
           ) : statusData.some((d) => d.value > 0) ? (
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -336,12 +345,12 @@ export default function Dashboard() {
                       <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">
                         <span className="flex items-center">
                           <CheckSquare className="w-3 h-3 mr-1" />
-                          {project.taskCount} تسک
+                          {project.taskCount || 0} تسک
                         </span>
                         {project.startDate && (
                           <span className="flex items-center">
                             <Calendar className="w-3 h-3 mr-1" />
-                            {format(new Date(project.startDate), 'yyyy/MM/dd')}
+                            {formatPersianDate(project.startDate)}
                           </span>
                         )}
                       </div>

@@ -46,8 +46,11 @@ public class ProjectTaskConfiguration : IEntityTypeConfiguration<ProjectTask>
 
         builder.OwnsOne(t => t.WbsCode, wbs =>
         {
-            wbs.Property(w => w.Code).HasMaxLength(100);
-            wbs.Property(w => w.Level);
+            wbs.Property(w => w.Code)
+                .HasColumnName("WbsCode")
+                .HasMaxLength(100);
+            wbs.Property(w => w.Level)
+                .HasColumnName("WbsLevel");
         });
 
         builder.HasOne(t => t.ParentTask)

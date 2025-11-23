@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { projectApi, ganttApi, taskApi } from '../services/api'
+import api, { projectApi, ganttApi, taskApi } from '../services/api'
 import { Project, Task } from '../types'
 import GanttChart from '../components/GanttChart'
 import { useUIStore } from '../store/uiStore'
@@ -18,7 +18,7 @@ import {
   Clock,
   FileText,
 } from 'lucide-react'
-import { format } from 'date-fns'
+import { formatPersianDate, formatRialSimple } from '../utils/dateUtils'
 
 type TabType = 'overview' | 'tasks' | 'resources' | 'timeline' | 'budget'
 
@@ -26,6 +26,7 @@ export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>()
   const [project, setProject] = useState<Project | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
+  const [projectResources, setProjectResources] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const { showToast } = useUIStore()
@@ -34,6 +35,7 @@ export default function ProjectDetail() {
     if (id) {
       loadProject()
       loadTasks()
+      loadProjectResources()
     }
   }, [id])
 
@@ -55,11 +57,46 @@ export default function ProjectDetail() {
     if (!id) return
 
     try {
-      // This would need to be implemented in the API
-      // For now, we'll use placeholder
-      setTasks([])
+      const response = await taskApi.getAll({
+        pageNumber: 1,
+        pageSize: 100,
+        projectId: id,
+      })
+      setTasks(response.data.items || [])
     } catch (error) {
+      console.error('Failed to load tasks:', error)
       showToast('خطا در بارگذاری تسک‌ها', 'error')
+      setTasks([])
+    }
+  }
+
+  const loadProjectResources = async () => {
+    if (!id) return
+
+    try {
+      const response = await api.get('/timetracking', {
+        params: {
+          pageNumber: 1,
+          pageSize: 100,
+          projectId: id,
+        },
+      })
+      // Extract unique resources from time entries
+      const resourcesMap = new Map<string, any>()
+      response.data.items?.forEach((entry: any) => {
+        if (entry.resourceId && entry.resourceName) {
+          if (!resourcesMap.has(entry.resourceId)) {
+            resourcesMap.set(entry.resourceId, {
+              id: entry.resourceId,
+              name: entry.resourceName,
+            })
+          }
+        }
+      })
+      setProjectResources(Array.from(resourcesMap.values()))
+    } catch (error) {
+      console.error('Failed to load project resources:', error)
+      setProjectResources([])
     }
   }
 
@@ -158,7 +195,7 @@ export default function ProjectDetail() {
             <div>
               <p className="text-sm text-gray-600">تسک‌ها</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {project.completedTaskCount} / {project.taskCount}
+                {project.completedTaskCount || 0} / {project.taskCount || 0}
               </p>
             </div>
             <div className="p-3 bg-green-100 rounded-lg">
@@ -172,7 +209,7 @@ export default function ProjectDetail() {
             <div>
               <p className="text-sm text-gray-600">بودجه</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                ${project.actualCost.toLocaleString()} / ${project.budget.toLocaleString()}
+                {formatRialSimple(project.actualCost)} / {formatRialSimple(project.budget)}
               </p>
             </div>
             <div className="p-3 bg-orange-100 rounded-lg">
@@ -186,9 +223,7 @@ export default function ProjectDetail() {
             <div>
               <p className="text-sm text-gray-600">تاریخ شروع</p>
               <p className="text-lg font-semibold text-gray-900 mt-1">
-                {project.startDate
-                  ? format(new Date(project.startDate), 'yyyy/MM/dd')
-                  : '-'}
+                {project.startDate ? formatPersianDate(project.startDate) : '-'}
               </p>
             </div>
             <div className="p-3 bg-blue-100 rounded-lg">
@@ -250,7 +285,7 @@ export default function ProjectDetail() {
                     <div className="flex justify-between">
                       <span className="text-gray-600">تاریخ شروع:</span>
                       <span className="font-medium text-gray-900">
-                        {format(new Date(project.startDate), 'yyyy/MM/dd')}
+                        {formatPersianDate(project.startDate)}
                       </span>
                     </div>
                   )}
@@ -258,7 +293,7 @@ export default function ProjectDetail() {
                     <div className="flex justify-between">
                       <span className="text-gray-600">تاریخ پایان:</span>
                       <span className="font-medium text-gray-900">
-                        {format(new Date(project.endDate), 'yyyy/MM/dd')}
+                        {formatPersianDate(project.endDate)}
                       </span>
                     </div>
                   )}
@@ -270,7 +305,7 @@ export default function ProjectDetail() {
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-gray-600">کل تسک‌ها:</span>
-                    <span className="font-medium text-gray-900">{project.taskCount}</span>
+                    <span className="font-medium text-gray-900">{project.taskCount || 0}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">تسک‌های تکمیل شده:</span>
@@ -281,13 +316,13 @@ export default function ProjectDetail() {
                   <div className="flex justify-between">
                     <span className="text-gray-600">بودجه:</span>
                     <span className="font-medium text-gray-900">
-                      ${project.budget.toLocaleString()}
+                      {formatRialSimple(project.budget)}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">هزینه واقعی:</span>
                     <span className="font-medium text-gray-900">
-                      ${project.actualCost.toLocaleString()}
+                      {formatRialSimple(project.actualCost)}
                     </span>
                   </div>
                 </div>
@@ -352,10 +387,30 @@ export default function ProjectDetail() {
                 مشاهده همه
               </Link>
             </div>
-            <div className="text-center py-12 text-gray-500">
-              <Users className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-              <p>منبعی یافت نشد</p>
-            </div>
+            {projectResources.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                <Users className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                <p>منبعی یافت نشد</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {projectResources.map((resource) => (
+                  <div
+                    key={resource.id}
+                    className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center">
+                      <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center mr-3">
+                        <Users className="w-5 h-5 text-primary-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{resource.name}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         )}
 
@@ -375,7 +430,7 @@ export default function ProjectDetail() {
                   <div>
                     <p className="text-sm text-gray-600">بودجه کل</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">
-                      ${project.budget.toLocaleString()}
+                      {formatRialSimple(project.budget)}
                     </p>
                   </div>
                   <DollarSign className="w-8 h-8 text-gray-400" />
@@ -384,7 +439,7 @@ export default function ProjectDetail() {
                   <div>
                     <p className="text-sm text-gray-600">هزینه واقعی</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">
-                      ${project.actualCost.toLocaleString()}
+                      {formatRialSimple(project.actualCost)}
                     </p>
                   </div>
                   <Clock className="w-8 h-8 text-gray-400" />
@@ -393,7 +448,7 @@ export default function ProjectDetail() {
                   <div>
                     <p className="text-sm text-primary-600">مانده بودجه</p>
                     <p className="text-2xl font-bold text-primary-600 mt-1">
-                      ${(project.budget - project.actualCost).toLocaleString()}
+                      {formatRialSimple(project.budget - project.actualCost)}
                     </p>
                   </div>
                   <FileText className="w-8 h-8 text-primary-400" />

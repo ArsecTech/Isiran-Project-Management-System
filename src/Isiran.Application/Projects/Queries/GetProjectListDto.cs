@@ -12,6 +12,8 @@ public class GetProjectListDto
     public decimal Budget { get; set; }
     public decimal ActualCost { get; set; }
     public double ProgressPercentage { get; set; }
+    public int TaskCount { get; set; }
+    public int CompletedTaskCount { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 

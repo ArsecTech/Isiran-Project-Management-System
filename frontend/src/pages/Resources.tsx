@@ -17,7 +17,7 @@ import {
   Clock,
 } from 'lucide-react'
 import api from '../services/api'
-import { Resource } from '../types'
+import { Resource, PagedResult } from '../types'
 import { useUIStore } from '../store/uiStore'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
@@ -26,6 +26,8 @@ import Input from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import Skeleton from '../components/ui/Skeleton'
+import { formatRialSimple } from '../utils/dateUtils'
+import { useI18nStore } from '../store/i18nStore'
 
 type ViewMode = 'list' | 'grid' | 'calendar'
 
@@ -39,6 +41,7 @@ export default function Resources() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null)
   const { showToast } = useUIStore()
+  const { t, isRTL } = useI18nStore()
 
   useEffect(() => {
     loadResources()
@@ -56,7 +59,7 @@ export default function Resources() {
       setResources(response.data.items || [])
     } catch (error: any) {
       console.error('Failed to load resources:', error)
-      const errorMessage = error.response?.data?.error || 'خطا در بارگذاری منابع'
+      const errorMessage = error.response?.data?.error || (isRTL ? 'خطا در بارگذاری منابع' : 'Failed to load resources')
       showToast(errorMessage, 'error')
       setResources([])
     } finally {
@@ -67,11 +70,11 @@ export default function Resources() {
   const handleCreateResource = async (data: Partial<Resource>) => {
     try {
       await api.post('/resources', data)
-      showToast('منبع با موفقیت ایجاد شد', 'success')
+      showToast(isRTL ? 'منبع با موفقیت ایجاد شد' : 'Resource created successfully', 'success')
       setShowCreateModal(false)
       loadResources()
     } catch (error) {
-      showToast('خطا در ایجاد منبع', 'error')
+      showToast(isRTL ? 'خطا در ایجاد منبع' : 'Failed to create resource', 'error')
     }
   }
 
@@ -100,18 +103,23 @@ export default function Resources() {
   }
 
   const getTypeLabel = (type: number) => {
-    const types = ['کارمند', 'پیمانکار', 'تجهیزات', 'مواد']
-    return types[type] || 'نامشخص'
+    const types = [
+      t('resources.type.employee'),
+      t('resources.type.contractor'),
+      t('resources.type.equipment'),
+      t('resources.type.material')
+    ]
+    return types[type] || (isRTL ? 'نامشخص' : 'Unknown')
   }
 
   const getStatusBadge = (status: number) => {
     const statusMap = {
-      0: { label: 'فعال', variant: 'success' as const },
-      1: { label: 'غیرفعال', variant: 'default' as const },
-      2: { label: 'در مرخصی', variant: 'warning' as const },
+      0: { labelKey: 'resources.status.active', variant: 'success' as const },
+      1: { labelKey: 'resources.status.inactive', variant: 'default' as const },
+      2: { labelKey: 'resources.status.onLeave', variant: 'warning' as const },
     }
     const statusInfo = statusMap[status as keyof typeof statusMap] || statusMap[0]
-    return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+    return <Badge variant={statusInfo.variant}>{t(statusInfo.labelKey)}</Badge>
   }
 
   const filteredResources = resources.filter((resource) => {
@@ -129,71 +137,76 @@ export default function Resources() {
   })
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${isRTL ? 'rtl' : 'ltr'}`} dir={isRTL ? 'rtl' : 'ltr'}>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">منابع</h1>
-          <p className="text-gray-600 mt-2">مدیریت منابع انسانی و مادی پروژه</p>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+            {t('resources.title')}
+          </h1>
+          <p className="text-gray-600 mt-2">
+            {isRTL ? 'مدیریت منابع انسانی و مادی پروژه' : 'Manage human and material project resources'}
+          </p>
         </div>
         <Button
           onClick={() => setShowCreateModal(true)}
           leftIcon={<Plus className="w-5 h-5" />}
+          className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 shadow-lg hover:shadow-xl transform hover:scale-105"
         >
-          منبع جدید
+          {t('resources.create')}
         </Button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
+        <Card className="p-4 bg-gradient-to-br from-white to-gray-50/50">
+          <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
             <div>
-              <p className="text-sm text-gray-600">کل منابع</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{resources.length}</p>
+              <p className="text-sm text-gray-600 font-medium">{t('resources.totalResources')}</p>
+              <p className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mt-1">{resources.length}</p>
             </div>
-            <div className="p-3 bg-blue-100 rounded-lg">
+            <div className="p-3 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl">
               <User className="w-6 h-6 text-blue-600" />
             </div>
           </div>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
+        <Card className="p-4 bg-gradient-to-br from-white to-gray-50/50">
+          <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
             <div>
-              <p className="text-sm text-gray-600">منابع فعال</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
+              <p className="text-sm text-gray-600 font-medium">{t('resources.activeResources')}</p>
+              <p className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mt-1">
                 {resources.filter(r => r.status === 0).length}
               </p>
             </div>
-            <div className="p-3 bg-green-100 rounded-lg">
+            <div className="p-3 bg-gradient-to-br from-green-100 to-green-200 rounded-xl">
               <Clock className="w-6 h-6 text-green-600" />
             </div>
           </div>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
+        <Card className="p-4 bg-gradient-to-br from-white to-gray-50/50">
+          <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
             <div>
-              <p className="text-sm text-gray-600">کارمندان</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
+              <p className="text-sm text-gray-600 font-medium">{t('resources.employees')}</p>
+              <p className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mt-1">
                 {resources.filter(r => r.type === 0).length}
               </p>
             </div>
-            <div className="p-3 bg-purple-100 rounded-lg">
+            <div className="p-3 bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl">
               <Briefcase className="w-6 h-6 text-purple-600" />
             </div>
           </div>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
+        <Card className="p-4 bg-gradient-to-br from-white to-gray-50/50">
+          <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
             <div>
-              <p className="text-sm text-gray-600">میانگین نرخ</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                ${resources.length > 0 
-                  ? Math.round(resources.reduce((sum, r) => sum + r.standardRate, 0) / resources.length)
-                  : 0}
+              <p className="text-sm text-gray-600 font-medium">{t('resources.averageRate')}</p>
+              <p className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mt-1">
+                {resources.length > 0 
+                  ? formatRialSimple(Math.round(resources.reduce((sum, r) => sum + (r.standardRate || 0), 0) / resources.length))
+                  : formatRialSimple(0)}
               </p>
             </div>
-            <div className="p-3 bg-orange-100 rounded-lg">
+            <div className="p-3 bg-gradient-to-br from-orange-100 to-orange-200 rounded-xl">
               <DollarSign className="w-6 h-6 text-orange-600" />
             </div>
           </div>
@@ -201,12 +214,12 @@ export default function Resources() {
       </div>
 
       {/* Filters and View Toggle */}
-      <Card className="p-4">
-        <div className="flex flex-col lg:flex-row gap-4">
+      <Card className="p-4 bg-gradient-to-br from-white to-gray-50/50">
+        <div className={`flex flex-col lg:flex-row gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
           {/* Search */}
           <div className="flex-1">
             <Input
-              placeholder="جستجو در منابع..."
+              placeholder={t('resources.search')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               leftIcon={<Search className="w-4 h-4" />}
@@ -214,48 +227,50 @@ export default function Resources() {
           </div>
 
           {/* Filters */}
-          <div className="flex gap-2">
+          <div className={`flex gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
             <select
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+              dir={isRTL ? 'rtl' : 'ltr'}
             >
-              <option value="all">همه انواع</option>
-              <option value="0">کارمند</option>
-              <option value="1">پیمانکار</option>
-              <option value="2">تجهیزات</option>
-              <option value="3">مواد</option>
+              <option value="all">{t('resources.allTypes')}</option>
+              <option value="0">{t('resources.type.employee')}</option>
+              <option value="1">{t('resources.type.contractor')}</option>
+              <option value="2">{t('resources.type.equipment')}</option>
+              <option value="3">{t('resources.type.material')}</option>
             </select>
 
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+              dir={isRTL ? 'rtl' : 'ltr'}
             >
-              <option value="all">همه وضعیت‌ها</option>
-              <option value="0">فعال</option>
-              <option value="1">غیرفعال</option>
-              <option value="2">در مرخصی</option>
+              <option value="all">{t('resources.allStatuses')}</option>
+              <option value="0">{t('resources.status.active')}</option>
+              <option value="1">{t('resources.status.inactive')}</option>
+              <option value="2">{t('resources.status.onLeave')}</option>
             </select>
           </div>
 
           {/* View Toggle */}
-          <div className="flex gap-2 border border-gray-200 rounded-lg p-1">
+          <div className={`flex gap-2 border border-gray-200 rounded-xl p-1 bg-white ${isRTL ? 'flex-row-reverse' : ''}`}>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded ${viewMode === 'list' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <List className="w-5 h-5" />
             </button>
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-2 rounded ${viewMode === 'grid' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <Grid className="w-5 h-5" />
             </button>
             <button
               onClick={() => setViewMode('calendar')}
-              className={`p-2 rounded ${viewMode === 'calendar' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`p-2 rounded-lg transition-all ${viewMode === 'calendar' ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <Calendar className="w-5 h-5" />
             </button>
@@ -274,29 +289,34 @@ export default function Resources() {
         <Card className="p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">منبع</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">نوع</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">وضعیت</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">ایمیل</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">نرخ</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">عملیات</th>
+                  <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('resources.name')}</th>
+                  <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('resources.type')}</th>
+                  <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('resources.status')}</th>
+                  <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('resources.email')}</th>
+                  <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('resources.standardRate')}</th>
+                  <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('common.edit')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredResources.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                      منبعی یافت نشد
+                    <td colSpan={6} className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center gap-2">
+                        <p className="text-gray-500 text-lg font-medium">{t('resources.noResources')}</p>
+                        <Button onClick={() => setShowCreateModal(true)} variant="outline" size="sm">
+                          {t('resources.createNew')}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ) : (
                   filteredResources.map((resource) => (
                     <tr key={resource.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
-                        <div className="flex items-center">
-                          <div className="w-10 h-10 bg-primary-500 rounded-full flex items-center justify-center text-white font-semibold mr-3">
+                        <div className={`flex items-center ${isRTL ? 'flex-row-reverse' : ''}`}>
+                          <div className={`w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center text-white font-semibold ${isRTL ? 'ml-3' : 'mr-3'} shadow-md`}>
                             {resource.fullName.charAt(0)}
                           </div>
                           <div>
@@ -312,20 +332,20 @@ export default function Resources() {
                       </td>
                       <td className="px-6 py-4">{getStatusBadge(resource.status)}</td>
                       <td className="px-6 py-4 text-sm text-gray-600">{resource.email}</td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        ${resource.standardRate.toFixed(2)}/hr
+                      <td className="px-6 py-4 text-sm text-gray-900 font-medium">
+                        {resource.standardRate != null ? `${formatRialSimple(resource.standardRate, false)} ${isRTL ? '/ساعت' : '/hr'}` : '-'}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
+                        <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
                           <button
                             onClick={() => setSelectedResource(resource)}
-                            className="p-2 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                            className="p-2 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all transform hover:scale-110"
                           >
                             <Edit className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDeleteResource(resource.id)}
-                            className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all transform hover:scale-110"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -384,7 +404,7 @@ export default function Resources() {
                   )}
                   <div className="flex items-center text-sm text-gray-600">
                     <DollarSign className="w-4 h-4 mr-2" />
-                    ${resource.standardRate.toFixed(2)}/hr
+                    {resource.standardRate != null ? `${formatRialSimple(resource.standardRate, false)}/ساعت` : '-'}
                   </div>
                 </div>
 
@@ -410,9 +430,11 @@ export default function Resources() {
           )}
         </div>
       ) : (
-        <Card className="p-12 text-center">
+        <Card className="p-12 text-center bg-gradient-to-br from-white to-gray-50/50">
           <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500">نمای تقویمی به زودی اضافه خواهد شد</p>
+          <p className="text-gray-500 text-lg font-medium">
+            {isRTL ? 'نمای تقویمی به زودی اضافه خواهد شد' : 'Calendar view coming soon'}
+          </p>
         </Card>
       )}
 
@@ -423,7 +445,7 @@ export default function Resources() {
           setShowCreateModal(false)
           setSelectedResource(null)
         }}
-        title={selectedResource ? 'ویرایش منبع' : 'منبع جدید'}
+        title={selectedResource ? (isRTL ? 'ویرایش منبع' : 'Edit Resource') : t('resources.create')}
         size="lg"
       >
         <ResourceForm
@@ -453,6 +475,7 @@ interface ResourceFormProps {
 }
 
 function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
+  const { t, isRTL } = useI18nStore()
   const [formData, setFormData] = useState({
     firstName: resource?.firstName || '',
     lastName: resource?.lastName || '',
@@ -473,16 +496,16 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4" dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="grid grid-cols-2 gap-4">
         <Input
-          label="نام"
+          label={isRTL ? 'نام' : 'First Name'}
           value={formData.firstName}
           onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
           required
         />
         <Input
-          label="نام خانوادگی"
+          label={isRTL ? 'نام خانوادگی' : 'Last Name'}
           value={formData.lastName}
           onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
           required
@@ -490,7 +513,7 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
       </div>
 
       <Input
-        label="ایمیل"
+        label={t('resources.email')}
         type="email"
         value={formData.email}
         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -498,7 +521,7 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
       />
 
       <Input
-        label="شماره تماس"
+        label={isRTL ? 'شماره تماس' : 'Phone Number'}
         type="tel"
         value={formData.phoneNumber}
         onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
@@ -507,39 +530,41 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            نوع
+            {t('resources.type')}
           </label>
           <select
             value={formData.type}
             onChange={(e) => setFormData({ ...formData, type: parseInt(e.target.value) })}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            dir={isRTL ? 'rtl' : 'ltr'}
           >
-            <option value="0">کارمند</option>
-            <option value="1">پیمانکار</option>
-            <option value="2">تجهیزات</option>
-            <option value="3">مواد</option>
+            <option value="0">{t('resources.type.employee')}</option>
+            <option value="1">{t('resources.type.contractor')}</option>
+            <option value="2">{t('resources.type.equipment')}</option>
+            <option value="3">{t('resources.type.material')}</option>
           </select>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            وضعیت
+            {t('resources.status')}
           </label>
           <select
             value={formData.status}
             onChange={(e) => setFormData({ ...formData, status: parseInt(e.target.value) })}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            dir={isRTL ? 'rtl' : 'ltr'}
           >
-            <option value="0">فعال</option>
-            <option value="1">غیرفعال</option>
-            <option value="2">در مرخصی</option>
+            <option value="0">{t('resources.status.active')}</option>
+            <option value="1">{t('resources.status.inactive')}</option>
+            <option value="2">{t('resources.status.onLeave')}</option>
           </select>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <Input
-          label="حداکثر واحد"
+          label={isRTL ? 'حداکثر واحد' : 'Max Units'}
           type="number"
           step="0.1"
           min="0"
@@ -548,7 +573,7 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
           onChange={(e) => setFormData({ ...formData, maxUnits: parseFloat(e.target.value) })}
         />
         <Input
-          label="نرخ استاندارد ($/hr)"
+          label={`${t('resources.standardRate')} (${isRTL ? 'ریال/ساعت' : 'Rial/hr'})`}
           type="number"
           step="0.01"
           min="0"
@@ -558,7 +583,7 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
       </div>
 
       <Input
-        label="نرخ اضافه‌کاری ($/hr)"
+        label={`${t('resources.overtimeRate')} (${isRTL ? 'ریال/ساعت' : 'Rial/hr'})`}
         type="number"
         step="0.01"
         min="0"
@@ -568,22 +593,24 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
 
       <div className="grid grid-cols-2 gap-4">
         <Input
-          label="دپارتمان"
+          label={t('resources.department')}
           value={formData.department}
           onChange={(e) => setFormData({ ...formData, department: e.target.value })}
         />
         <Input
-          label="عنوان شغلی"
+          label={t('resources.jobTitle')}
           value={formData.jobTitle}
           onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
         />
       </div>
 
-      <div className="flex items-center justify-end gap-3 pt-4">
+      <div className={`flex items-center ${isRTL ? 'justify-start flex-row-reverse' : 'justify-end'} gap-3 pt-4`}>
         <Button type="button" variant="outline" onClick={onCancel}>
-          انصراف
+          {t('common.cancel')}
         </Button>
-        <Button type="submit">ذخیره</Button>
+        <Button type="submit" className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800">
+          {t('common.save')}
+        </Button>
       </div>
     </form>
   )

@@ -29,11 +29,16 @@ public class GanttCalculationResult
 public class TaskSchedule
 {
     public Guid TaskId { get; set; }
+    public string TaskName { get; set; } = string.Empty;
     public DateTime? CalculatedStartDate { get; set; }
     public DateTime? CalculatedEndDate { get; set; }
     public int CalculatedDuration { get; set; }
     public bool IsOnCriticalPath { get; set; }
     public int Slack { get; set; }
+    public Guid? ParentTaskId { get; set; }
+    public int Level { get; set; }
+    public int? PercentComplete { get; set; }
+    public int Status { get; set; }
 }
 
 public class ResourceAllocationResult

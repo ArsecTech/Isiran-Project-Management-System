@@ -1,5 +1,6 @@
 import { InputHTMLAttributes, forwardRef } from 'react'
 import { clsx } from 'clsx'
+import { useI18nStore } from '../../store/i18nStore'
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string
@@ -23,6 +24,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     },
     ref
   ) => {
+    const { isRTL } = useI18nStore()
     const inputId = id || `input-${Math.random().toString(36).substr(2, 9)}`
 
     return (
@@ -37,28 +39,30 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         )}
         <div className="relative">
           {leftIcon && (
-            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+            <div className={`absolute ${isRTL ? 'right' : 'left'}-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10`}>
               {leftIcon}
             </div>
           )}
           <input
             ref={ref}
             id={inputId}
+            dir={isRTL ? 'rtl' : 'ltr'}
             className={clsx(
-              'w-full px-4 py-3 border rounded-lg transition-all duration-200',
+              'w-full px-4 py-3 border rounded-xl transition-all duration-200',
               'focus:outline-none focus:ring-2 focus:ring-offset-0',
-              leftIcon && 'pl-10',
-              rightIcon && 'pr-10',
+              'bg-white shadow-sm',
+              leftIcon && (isRTL ? 'pr-10' : 'pl-10'),
+              rightIcon && (isRTL ? 'pl-10' : 'pr-10'),
               error
-                ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-                : 'border-gray-300 focus:ring-primary-500 focus:border-primary-500',
+                ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50/50'
+                : 'border-gray-300 focus:ring-primary-500 focus:border-primary-500 hover:border-primary-300',
               'disabled:bg-gray-100 disabled:cursor-not-allowed',
               className
             )}
             {...props}
           />
           {rightIcon && (
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+            <div className={`absolute ${isRTL ? 'left' : 'right'}-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10`}>
               {rightIcon}
             </div>
           )}

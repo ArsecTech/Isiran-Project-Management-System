@@ -9,6 +9,7 @@ public class GetTimeEntryListQuery : IRequest<PagedResult<GetTimeEntryListDto>>
     public int PageSize { get; set; } = 10;
     public Guid? TaskId { get; set; }
     public Guid? ResourceId { get; set; }
+    public Guid? ProjectId { get; set; }
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
 }

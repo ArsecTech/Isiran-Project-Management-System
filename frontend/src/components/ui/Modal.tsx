@@ -1,6 +1,7 @@
 import { Fragment, ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { clsx } from 'clsx'
+import { useI18nStore } from '../../store/i18nStore'
 
 interface ModalProps {
   isOpen: boolean
@@ -21,6 +22,7 @@ export default function Modal({
   showCloseButton = true,
   footer,
 }: ModalProps) {
+  const { isRTL } = useI18nStore()
   if (!isOpen) return null
 
   const sizes = {
@@ -51,14 +53,14 @@ export default function Modal({
         >
           {/* Header */}
           {(title || showCloseButton) && (
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <div className={`flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white ${isRTL ? 'flex-row-reverse' : ''}`}>
               {title && (
-                <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">{title}</h2>
               )}
               {showCloseButton && (
                 <button
                   onClick={onClose}
-                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
+                  className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600 transform hover:rotate-90 transition-transform"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -71,7 +73,7 @@ export default function Modal({
 
           {/* Footer */}
           {footer && (
-            <div className="p-6 border-t border-gray-200 flex items-center justify-end space-x-3">
+            <div className={`p-6 border-t border-gray-200 flex items-center ${isRTL ? 'justify-start flex-row-reverse space-x-reverse' : 'justify-end'} gap-3 bg-gray-50/50`}>
               {footer}
             </div>
           )}

@@ -35,6 +35,28 @@ public class GanttCalculationService : IGanttCalculationService
         var tasks = await _taskRepository.FindAsync(t => t.ProjectId == projectId && !t.IsDeleted, cancellationToken);
         var taskList = tasks.ToList();
 
+        // Calculate hierarchy levels
+        var taskLevelMap = new Dictionary<Guid, int>();
+        foreach (var task in taskList)
+        {
+            if (!task.ParentTaskId.HasValue)
+            {
+                taskLevelMap[task.Id] = 0;
+            }
+            else
+            {
+                var level = 0;
+                var currentTask = task;
+                while (currentTask.ParentTaskId.HasValue)
+                {
+                    level++;
+                    currentTask = taskList.FirstOrDefault(t => t.Id == currentTask.ParentTaskId.Value);
+                    if (currentTask == null) break;
+                }
+                taskLevelMap[task.Id] = level;
+            }
+        }
+
         var result = new GanttCalculationResult
         {
             TaskSchedules = new List<TaskSchedule>()
@@ -119,9 +141,14 @@ public class GanttCalculationService : IGanttCalculationService
             result.TaskSchedules.Add(new TaskSchedule
             {
                 TaskId = task.Id,
+                TaskName = task.Name,
                 CalculatedStartDate = taskStart,
                 CalculatedEndDate = earliestEnd[task.Id],
-                CalculatedDuration = task.Duration
+                CalculatedDuration = task.Duration,
+                ParentTaskId = task.ParentTaskId,
+                Level = taskLevelMap.ContainsKey(task.Id) ? taskLevelMap[task.Id] : 0,
+                PercentComplete = task.PercentComplete,
+                Status = (int)task.Status
             });
 
             // Add successors to queue

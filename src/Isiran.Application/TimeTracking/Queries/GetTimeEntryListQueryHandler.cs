@@ -25,7 +25,8 @@ public class GetTimeEntryListQueryHandler : IRequestHandler<GetTimeEntryListQuer
             (!request.TaskId.HasValue || te.TaskId == request.TaskId.Value) &&
             (!request.ResourceId.HasValue || te.ResourceId == request.ResourceId.Value) &&
             (!request.StartDate.HasValue || te.Date >= request.StartDate.Value) &&
-            (!request.EndDate.HasValue || te.Date <= request.EndDate.Value),
+            (!request.EndDate.HasValue || te.Date <= request.EndDate.Value) &&
+            (!request.ProjectId.HasValue || (te.Task != null && te.Task.ProjectId == request.ProjectId.Value)),
             cancellationToken);
 
         var totalCount = timeEntries.Count();

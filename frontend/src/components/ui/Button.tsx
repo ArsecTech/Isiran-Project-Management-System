@@ -1,6 +1,7 @@
 import { ButtonHTMLAttributes, forwardRef } from 'react'
 import { clsx } from 'clsx'
 import { Loader2 } from 'lucide-react'
+import { useI18nStore } from '../../store/i18nStore'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger'
@@ -25,6 +26,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref
   ) => {
+    const { isRTL } = useI18nStore()
     const baseStyles =
       'inline-flex items-center justify-center font-semibold rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed'
 
@@ -60,14 +62,14 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       >
         {isLoading ? (
           <>
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            <span>Loading...</span>
+            <Loader2 className={`w-4 h-4 animate-spin ${isRTL ? 'ml-2' : 'mr-2'}`} />
+            <span>{isRTL ? 'در حال بارگذاری...' : 'Loading...'}</span>
           </>
         ) : (
           <>
-            {leftIcon && <span className="mr-2">{leftIcon}</span>}
+            {leftIcon && <span className={isRTL ? 'ml-2' : 'mr-2'}>{leftIcon}</span>}
             {children}
-            {rightIcon && <span className="ml-2">{rightIcon}</span>}
+            {rightIcon && <span className={isRTL ? 'mr-2' : 'ml-2'}>{rightIcon}</span>}
           </>
         )}
       </button>

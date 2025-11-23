@@ -9,15 +9,18 @@ namespace Isiran.Application.Projects.Queries;
 public class GetProjectListQueryHandler : IRequestHandler<GetProjectListQuery, PagedResult<GetProjectListDto>>
 {
     private readonly IRepository<Domain.Projects.Project> _repository;
+    private readonly IRepository<Domain.Tasks.ProjectTask> _taskRepository;
     private readonly IMapper _mapper;
     private readonly ILogger<GetProjectListQueryHandler> _logger;
 
     public GetProjectListQueryHandler(
         IRepository<Domain.Projects.Project> repository,
+        IRepository<Domain.Tasks.ProjectTask> taskRepository,
         IMapper mapper,
         ILogger<GetProjectListQueryHandler> logger)
     {
         _repository = repository;
+        _taskRepository = taskRepository;
         _mapper = mapper;
         _logger = logger;
     }
@@ -41,14 +44,28 @@ public class GetProjectListQueryHandler : IRequestHandler<GetProjectListQuery, P
 
         var dtos = _mapper.Map<List<GetProjectListDto>>(pagedProjects);
 
-        // Calculate progress for each project
+        // Calculate progress for each project by loading tasks separately using repository
+        var projectIds = pagedProjects.Select(p => p.Id).ToList();
+        var allTasks = await _taskRepository.FindAsync(
+            t => projectIds.Contains(t.ProjectId) && !t.IsDeleted, 
+            cancellationToken);
+        var taskList = allTasks.ToList();
+
         foreach (var dto in dtos)
         {
-            var project = pagedProjects.First(p => p.Id == dto.Id);
-            if (project.Tasks != null && project.Tasks.Any())
+            var projectTasks = taskList.Where(t => t.ProjectId == dto.Id).ToList();
+            if (projectTasks.Any())
             {
-                var completedCount = project.Tasks.Count(t => t.Status == Domain.Tasks.TaskStatus.Completed);
-                dto.ProgressPercentage = (double)completedCount / project.Tasks.Count * 100;
+                var completedCount = projectTasks.Count(t => t.Status == Domain.Tasks.TaskStatus.Completed);
+                dto.TaskCount = projectTasks.Count;
+                dto.CompletedTaskCount = completedCount;
+                dto.ProgressPercentage = (double)completedCount / projectTasks.Count * 100;
+            }
+            else
+            {
+                dto.TaskCount = 0;
+                dto.CompletedTaskCount = 0;
+                dto.ProgressPercentage = 0;
             }
         }
 

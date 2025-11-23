@@ -40,6 +40,11 @@ public class UpdateProjectCommandHandler : IRequestHandler<UpdateProjectCommand,
             request.EndDate,
             request.Budget);
 
+        if (request.Status.HasValue)
+        {
+            project.ChangeStatus(request.Status.Value);
+        }
+
         await _repository.UpdateAsync(project, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

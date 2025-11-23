@@ -9,5 +9,6 @@ public class GetResourceListDto
     public Domain.Resources.ResourceStatus Status { get; set; }
     public string? Department { get; set; }
     public string? JobTitle { get; set; }
+    public decimal StandardRate { get; set; }
 }
 
