@@ -16,7 +16,7 @@ import {
   Clock,
 } from 'lucide-react'
 import api from '../services/api'
-import { Resource, PagedResult } from '../types'
+import { Resource, PagedResult, ResourceType, ResourceStatus } from '../types'
 import { useUIStore } from '../store/uiStore'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
@@ -233,10 +233,9 @@ export default function Resources() {
               dir={isRTL ? 'rtl' : 'ltr'}
             >
               <option value="all">{t('resources.allTypes')}</option>
-              <option value="0">{t('resources.type.employee')}</option>
-              <option value="1">{t('resources.type.contractor')}</option>
-              <option value="2">{t('resources.type.equipment')}</option>
-              <option value="3">{t('resources.type.material')}</option>
+            <option value={ResourceType.Work}>{t('resources.type.employee')}</option>
+            <option value={ResourceType.Material}>{t('resources.type.material')}</option>
+            <option value={ResourceType.Cost}>{t('resources.type.cost')}</option>
             </select>
 
             <select
@@ -474,18 +473,34 @@ interface ResourceFormProps {
 
 function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
   const { t, isRTL } = useI18nStore()
+  const [resources, setResources] = useState<Resource[]>([])
+
+  useEffect(() => {
+    loadResources()
+  }, [])
+
+  const loadResources = async () => {
+    try {
+      const response = await api.get('/resources', { params: { pageNumber: 1, pageSize: 100 } })
+      setResources(response.data.items || [])
+    } catch (error) {
+      console.error('Failed to load resources:', error)
+    }
+  }
+
   const [formData, setFormData] = useState({
     firstName: resource?.firstName || '',
     lastName: resource?.lastName || '',
     email: resource?.email || '',
     phoneNumber: resource?.phoneNumber || '',
-    type: resource?.type ?? 0,
-    status: resource?.status ?? 0,
-    maxUnits: resource?.maxUnits ?? 1.0,
+    type: resource?.type ?? ResourceType.Work,
+    status: resource?.status ?? ResourceStatus.Active,
+    maxUnits: resource?.maxUnits ?? 100,
     standardRate: resource?.standardRate ?? 0,
     overtimeRate: resource?.overtimeRate ?? 0,
     department: resource?.department || '',
     jobTitle: resource?.jobTitle || '',
+    managerId: resource?.managerId || '',
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -536,10 +551,9 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
             dir={isRTL ? 'rtl' : 'ltr'}
           >
-            <option value="0">{t('resources.type.employee')}</option>
-            <option value="1">{t('resources.type.contractor')}</option>
-            <option value="2">{t('resources.type.equipment')}</option>
-            <option value="3">{t('resources.type.material')}</option>
+            <option value={ResourceType.Work}>{t('resources.type.employee')}</option>
+            <option value={ResourceType.Material}>{t('resources.type.material')}</option>
+            <option value={ResourceType.Cost}>{t('resources.type.cost')}</option>
           </select>
         </div>
 
@@ -553,20 +567,21 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
             dir={isRTL ? 'rtl' : 'ltr'}
           >
-            <option value="0">{t('resources.status.active')}</option>
-            <option value="1">{t('resources.status.inactive')}</option>
-            <option value="2">{t('resources.status.onLeave')}</option>
+            <option value={ResourceStatus.Active}>{t('resources.status.active')}</option>
+            <option value={ResourceStatus.Inactive}>{t('resources.status.inactive')}</option>
+            <option value={ResourceStatus.OnLeave}>{t('resources.status.onLeave')}</option>
+            <option value={ResourceStatus.Terminated}>{t('resources.status.terminated')}</option>
           </select>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <Input
-          label={isRTL ? 'حداکثر واحد' : 'Max Units'}
+          label={`${isRTL ? 'حداکثر واحد' : 'Max Units'} (%)`}
           type="number"
           step="0.1"
           min="0"
-          max="1"
+          max="100"
           value={formData.maxUnits}
           onChange={(e) => setFormData({ ...formData, maxUnits: parseFloat(e.target.value) })}
         />
@@ -600,6 +615,25 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
           value={formData.jobTitle}
           onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
         />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          {isRTL ? 'مدیر' : 'Manager'}
+        </label>
+        <select
+          value={formData.managerId}
+          onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
+          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+          dir={isRTL ? 'rtl' : 'ltr'}
+        >
+          <option value="">{isRTL ? 'اختصاص داده نشده' : 'Not Assigned'}</option>
+          {resources.filter(r => r.id !== resource?.id).map((res) => (
+            <option key={res.id} value={res.id}>
+              {res.fullName}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className={`flex items-center ${isRTL ? 'justify-start flex-row-reverse' : 'justify-end'} gap-3 pt-4`}>

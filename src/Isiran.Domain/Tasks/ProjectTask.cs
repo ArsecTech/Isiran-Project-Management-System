@@ -28,6 +28,8 @@ public class ProjectTask : AggregateRoot
     public Guid? AssignedToId { get; private set; }
     public int DisplayOrder { get; private set; }
     public TaskConstraint Constraint { get; private set; }
+    public string? JiraIssueKey { get; private set; }
+    public string? JiraIssueId { get; private set; }
     public DateTime? ConstraintDate { get; private set; }
     public WorkBreakdownStructure WbsCode { get; private set; } = null!;
 
@@ -173,6 +175,20 @@ public class ProjectTask : AggregateRoot
         }
 
         ParentTaskId = parentTaskId;
+        UpdateTimestamp();
+    }
+
+    public void LinkToJira(string issueKey, string? issueId = null)
+    {
+        JiraIssueKey = issueKey;
+        JiraIssueId = issueId;
+        UpdateTimestamp();
+    }
+
+    public void UnlinkFromJira()
+    {
+        JiraIssueKey = null;
+        JiraIssueId = null;
         UpdateTimestamp();
     }
 }

@@ -41,6 +41,23 @@ builder.Services.AddScoped<Isiran.GanttEngine.Services.IGanttCalculationService,
 builder.Services.AddScoped<Isiran.GanttEngine.Services.IEnhancedCriticalPathService, Isiran.GanttEngine.Services.EnhancedCriticalPathService>();
 builder.Services.AddScoped<Isiran.GanttEngine.Services.IResourceLevelingService, Isiran.GanttEngine.Services.ResourceLevelingService>();
 
+// Integration Services
+builder.Services.AddHttpClient<Isiran.Core.Interfaces.IJiraIntegrationService, Isiran.Infrastructure.Integrations.JiraIntegrationService>();
+builder.Services.AddScoped<Isiran.Core.Interfaces.IJiraIntegrationService, Isiran.Infrastructure.Integrations.JiraIntegrationService>();
+
+builder.Services.AddHttpClient<Isiran.Core.Interfaces.IConfluenceIntegrationService, Isiran.Infrastructure.Integrations.ConfluenceIntegrationService>();
+builder.Services.AddScoped<Isiran.Core.Interfaces.IConfluenceIntegrationService, Isiran.Infrastructure.Integrations.ConfluenceIntegrationService>();
+
+builder.Services.AddHttpClient<Isiran.Core.Interfaces.IPowerBIIntegrationService, Isiran.Infrastructure.Integrations.PowerBIIntegrationService>();
+builder.Services.AddScoped<Isiran.Core.Interfaces.IPowerBIIntegrationService, Isiran.Infrastructure.Integrations.PowerBIIntegrationService>();
+
+// KPI Calculation Service
+builder.Services.AddScoped<Isiran.Core.Interfaces.IKPICalculationService, Isiran.Infrastructure.Services.KPICalculationService>();
+
+// Background Jobs
+builder.Services.AddScoped<Isiran.Api.BackgroundJobs.IntegrationSyncJob>();
+builder.Services.AddHostedService<Isiran.Api.BackgroundJobs.ScheduledJobsService>();
+
 // JWT Authentication
 builder.Services.AddAuthentication(options =>
 {

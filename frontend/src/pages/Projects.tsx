@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { projectApi } from '../services/api'
-import { Project, PagedResult, ProjectStatus, ProjectPriority } from '../types'
+import api from '../services/api'
+import { Project, PagedResult, ProjectStatus, ProjectPriority, Resource } from '../types'
 import { Plus, Search, Filter, Edit, Trash2, MoreVertical } from 'lucide-react'
 import { useUIStore } from '../store/uiStore'
 import { useProjectStore } from '../store/projectStore'
@@ -352,6 +353,21 @@ interface ProjectFormProps {
 
 function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
   const { t, isRTL } = useI18nStore()
+  const [resources, setResources] = useState<Resource[]>([])
+
+  useEffect(() => {
+    loadResources()
+  }, [])
+
+  const loadResources = async () => {
+    try {
+      const response = await api.get('/resources', { params: { pageNumber: 1, pageSize: 100 } })
+      setResources(response.data.items || [])
+    } catch (error) {
+      console.error('Failed to load resources:', error)
+    }
+  }
+
   const [formData, setFormData] = useState({
     name: project?.name || '',
     code: project?.code || '',
@@ -360,7 +376,24 @@ function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
     priority: project?.priority ?? ProjectPriority.Medium,
     startDate: project?.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '',
     endDate: project?.endDate ? new Date(project.endDate).toISOString().split('T')[0] : '',
+    actualStartDate: project?.actualStartDate ? new Date(project.actualStartDate).toISOString().split('T')[0] : '',
+    actualEndDate: project?.actualEndDate ? new Date(project.actualEndDate).toISOString().split('T')[0] : '',
     budget: project?.budget || 0,
+    actualCost: project?.actualCost || 0,
+    projectManagerId: project?.projectManagerId || '',
+    ownerId: project?.ownerId || '',
+    settings: project?.settings || {
+      autoSchedule: true,
+      criticalPathEnabled: true,
+      resourceLevelingEnabled: true,
+      workingHoursPerDay: 8,
+      workingDaysPerWeek: 5,
+      calendarId: 'Standard',
+      allowOvertime: false,
+      defaultHourlyRate: 0,
+      currency: 'IRR',
+      timeZone: 'Asia/Tehran'
+    },
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -445,16 +478,183 @@ function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
           value={formData.endDate}
           onChange={(value) => setFormData({ ...formData, endDate: value })}
         />
+        <PersianDatePicker
+          label={isRTL ? 'تاریخ شروع واقعی' : 'Actual Start Date'}
+          value={formData.actualStartDate}
+          onChange={(value) => setFormData({ ...formData, actualStartDate: value })}
+        />
+        <PersianDatePicker
+          label={isRTL ? 'تاریخ پایان واقعی' : 'Actual End Date'}
+          value={formData.actualEndDate}
+          onChange={(value) => setFormData({ ...formData, actualEndDate: value })}
+        />
       </div>
 
-      <Input
-        label={`${t('projects.budget')} (${isRTL ? 'ریال' : 'Rial'})`}
-        type="number"
-        step="0.01"
-        min="0"
-        value={formData.budget}
-        onChange={(e) => setFormData({ ...formData, budget: parseFloat(e.target.value) || 0 })}
-      />
+      <div className="grid grid-cols-2 gap-4">
+        <Input
+          label={`${t('projects.budget')} (${isRTL ? 'ریال' : 'Rial'})`}
+          type="number"
+          step="0.01"
+          min="0"
+          value={formData.budget}
+          onChange={(e) => setFormData({ ...formData, budget: parseFloat(e.target.value) || 0 })}
+        />
+        <Input
+          label={`${isRTL ? 'هزینه واقعی' : 'Actual Cost'} (${isRTL ? 'ریال' : 'Rial'})`}
+          type="number"
+          step="0.01"
+          min="0"
+          value={formData.actualCost}
+          onChange={(e) => setFormData({ ...formData, actualCost: parseFloat(e.target.value) || 0 })}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {isRTL ? 'مدیر پروژه' : 'Project Manager'}
+          </label>
+          <select
+            value={formData.projectManagerId}
+            onChange={(e) => setFormData({ ...formData, projectManagerId: e.target.value })}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            dir={isRTL ? 'rtl' : 'ltr'}
+          >
+            <option value="">{isRTL ? 'اختصاص داده نشده' : 'Not Assigned'}</option>
+            {resources.map((resource) => (
+              <option key={resource.id} value={resource.id}>
+                {resource.fullName}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {isRTL ? 'مالک پروژه' : 'Project Owner'}
+          </label>
+          <select
+            value={formData.ownerId}
+            onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            dir={isRTL ? 'rtl' : 'ltr'}
+          >
+            <option value="">{isRTL ? 'اختصاص داده نشده' : 'Not Assigned'}</option>
+            {resources.map((resource) => (
+              <option key={resource.id} value={resource.id}>
+                {resource.fullName}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Project Settings Section */}
+      <div className="border-t border-gray-200 pt-4 mt-4">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">{isRTL ? 'تنظیمات پروژه' : 'Project Settings'}</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              checked={formData.settings.autoSchedule}
+              onChange={(e) => setFormData({
+                ...formData,
+                settings: { ...formData.settings, autoSchedule: e.target.checked }
+              })}
+              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+            />
+            <label className="mr-2 text-sm text-gray-700">{isRTL ? 'زمان‌بندی خودکار' : 'Auto Schedule'}</label>
+          </div>
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              checked={formData.settings.criticalPathEnabled}
+              onChange={(e) => setFormData({
+                ...formData,
+                settings: { ...formData.settings, criticalPathEnabled: e.target.checked }
+              })}
+              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+            />
+            <label className="mr-2 text-sm text-gray-700">{isRTL ? 'فعال‌سازی مسیر بحرانی' : 'Critical Path Enabled'}</label>
+          </div>
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              checked={formData.settings.resourceLevelingEnabled}
+              onChange={(e) => setFormData({
+                ...formData,
+                settings: { ...formData.settings, resourceLevelingEnabled: e.target.checked }
+              })}
+              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+            />
+            <label className="mr-2 text-sm text-gray-700">{isRTL ? 'فعال‌سازی تراز منابع' : 'Resource Leveling Enabled'}</label>
+          </div>
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              checked={formData.settings.allowOvertime}
+              onChange={(e) => setFormData({
+                ...formData,
+                settings: { ...formData.settings, allowOvertime: e.target.checked }
+              })}
+              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+            />
+            <label className="mr-2 text-sm text-gray-700">{isRTL ? 'اجازه اضافه‌کاری' : 'Allow Overtime'}</label>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4 mt-4">
+          <Input
+            label={isRTL ? 'ساعات کاری روزانه' : 'Working Hours Per Day'}
+            type="number"
+            min="1"
+            max="24"
+            value={formData.settings.workingHoursPerDay}
+            onChange={(e) => setFormData({
+              ...formData,
+              settings: { ...formData.settings, workingHoursPerDay: parseInt(e.target.value) || 8 }
+            })}
+          />
+          <Input
+            label={isRTL ? 'روزهای کاری هفتگی' : 'Working Days Per Week'}
+            type="number"
+            min="1"
+            max="7"
+            value={formData.settings.workingDaysPerWeek}
+            onChange={(e) => setFormData({
+              ...formData,
+              settings: { ...formData.settings, workingDaysPerWeek: parseInt(e.target.value) || 5 }
+            })}
+          />
+          <Input
+            label={`${isRTL ? 'نرخ ساعتی پیش‌فرض' : 'Default Hourly Rate'} (${isRTL ? 'ریال' : 'Rial'})`}
+            type="number"
+            step="0.01"
+            min="0"
+            value={formData.settings.defaultHourlyRate}
+            onChange={(e) => setFormData({
+              ...formData,
+              settings: { ...formData.settings, defaultHourlyRate: parseFloat(e.target.value) || 0 }
+            })}
+          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {isRTL ? 'واحد پول' : 'Currency'}
+            </label>
+            <select
+              value={formData.settings.currency}
+              onChange={(e) => setFormData({
+                ...formData,
+                settings: { ...formData.settings, currency: e.target.value }
+              })}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+              dir={isRTL ? 'rtl' : 'ltr'}
+            >
+              <option value="IRR">{isRTL ? 'ریال' : 'Rial (IRR)'}</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
       <div className={`flex items-center ${isRTL ? 'justify-start flex-row-reverse' : 'justify-end'} gap-3 pt-4`}>
         <Button type="button" variant="outline" onClick={onCancel}>

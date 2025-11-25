@@ -20,6 +20,12 @@ public class ProjectTaskConfiguration : IEntityTypeConfiguration<ProjectTask>
         builder.Property(t => t.Description)
             .HasMaxLength(2000);
 
+        builder.Property(t => t.JiraIssueKey)
+            .HasMaxLength(100);
+
+        builder.Property(t => t.JiraIssueId)
+            .HasMaxLength(100);
+
         builder.Property(t => t.Type)
             .HasConversion<int>();
 
@@ -82,6 +88,7 @@ public class ProjectTaskConfiguration : IEntityTypeConfiguration<ProjectTask>
         builder.HasIndex(t => t.ParentTaskId);
         builder.HasIndex(t => t.AssignedToId);
         builder.HasIndex(t => t.Status);
+        builder.HasIndex(t => t.JiraIssueKey);
         builder.HasIndex(t => new { t.ProjectId, t.DisplayOrder });
     }
 }

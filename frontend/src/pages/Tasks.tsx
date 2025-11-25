@@ -9,7 +9,8 @@ import {
   Trash2,
 } from 'lucide-react'
 import { taskApi, projectApi } from '../services/api'
-import { Task, Project, TaskStatus, TaskPriority } from '../types'
+import api from '../services/api'
+import { Task, Project, TaskStatus, TaskPriority, TaskType, TaskConstraint, Resource } from '../types'
 import { useUIStore } from '../store/uiStore'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
@@ -331,13 +332,15 @@ export default function Tasks() {
                   <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('tasks.status')}</th>
                   <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('tasks.priority')}</th>
                   <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('tasks.startDate')}</th>
+                  <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{isRTL ? 'پیشرفت' : 'Progress'}</th>
+                  <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{isRTL ? 'مدت (روز)' : 'Duration'}</th>
                   <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${isRTL ? 'text-right' : 'text-left'}`}>{t('common.edit')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredTasks.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center">
+                    <td colSpan={8} className="px-6 py-12 text-center">
                       <div className="flex flex-col items-center gap-2">
                         <p className="text-gray-500 text-lg font-medium">{t('tasks.noTasks')}</p>
                         <Button onClick={() => setShowCreateModal(true)} variant="outline" size="sm">
@@ -380,6 +383,20 @@ export default function Tasks() {
                       <td className="px-6 py-4">{getPriorityBadge(task.priority)}</td>
                       <td className="px-6 py-4 text-sm text-gray-600">
                         {task.startDate ? formatPersianDate(task.startDate) : '-'}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-2 bg-gradient-to-r from-primary-500 to-primary-600 rounded-full transition-all"
+                              style={{ width: `${task.percentComplete || 0}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-gray-600">{task.percentComplete || 0}%</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {task.duration || '-'} {isRTL ? 'روز' : 'days'}
                       </td>
                       <td className="px-6 py-4">
                         <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
@@ -498,15 +515,46 @@ interface TaskFormProps {
 
 function TaskForm({ task, projects, tasks, onSubmit, onCancel }: TaskFormProps) {
   const { t, isRTL } = useI18nStore()
+  const [resources, setResources] = useState<Resource[]>([])
+  
+  useEffect(() => {
+    loadResources()
+  }, [])
+
+  const loadResources = async () => {
+    try {
+      const response = await api.get('/resources', { params: { pageNumber: 1, pageSize: 100 } })
+      setResources(response.data.items || [])
+    } catch (error) {
+      console.error('Failed to load resources:', error)
+    }
+  }
+
   const [formData, setFormData] = useState({
     name: task?.name || '',
     description: task?.description || '',
     projectId: task?.projectId || projects[0]?.id || '',
     parentTaskId: task?.parentTaskId || '',
+    type: task?.type ?? TaskType.Task,
     status: task?.status ?? TaskStatus.NotStarted,
     priority: task?.priority ?? TaskPriority.Medium,
     startDate: task?.startDate ? new Date(task.startDate).toISOString().split('T')[0] : '',
     endDate: task?.endDate ? new Date(task.endDate).toISOString().split('T')[0] : '',
+    actualStartDate: task?.actualStartDate ? new Date(task.actualStartDate).toISOString().split('T')[0] : '',
+    actualEndDate: task?.actualEndDate ? new Date(task.actualEndDate).toISOString().split('T')[0] : '',
+    duration: task?.duration || 1,
+    actualDuration: task?.actualDuration || 0,
+    estimatedEffort: task?.estimatedEffort || 0,
+    actualEffort: task?.actualEffort || 0,
+    estimatedCost: task?.estimatedCost || 0,
+    actualCost: task?.actualCost || 0,
+    percentComplete: task?.percentComplete || 0,
+    assignedToId: task?.assignedToId || '',
+    displayOrder: task?.displayOrder || 0,
+    constraint: task?.constraint ?? TaskConstraint.AsSoonAsPossible,
+    jiraIssueKey: task?.jiraIssueKey || '',
+    jiraIssueId: task?.jiraIssueId || '',
+    constraintDate: task?.constraintDate ? new Date(task.constraintDate).toISOString().split('T')[0] : '',
   })
 
   // Get available parent tasks (tasks from the same project, excluding current task and its descendants)
@@ -544,8 +592,12 @@ function TaskForm({ task, projects, tasks, onSubmit, onCancel }: TaskFormProps) 
     const cleanData: any = {
       name: formData.name,
       projectId: formData.projectId,
+      type: formData.type,
       status: formData.status,
       priority: formData.priority,
+      duration: formData.duration,
+      displayOrder: formData.displayOrder,
+      constraint: formData.constraint,
     }
     
     if (formData.description) cleanData.description = formData.description
@@ -553,10 +605,31 @@ function TaskForm({ task, projects, tasks, onSubmit, onCancel }: TaskFormProps) 
     if (formData.endDate && formData.endDate.trim() !== '') {
       cleanData.endDate = formData.endDate
     }
+    if (formData.actualStartDate && formData.actualStartDate.trim() !== '') {
+      cleanData.actualStartDate = formData.actualStartDate
+    }
+    if (formData.actualEndDate && formData.actualEndDate.trim() !== '') {
+      cleanData.actualEndDate = formData.actualEndDate
+    }
     if (formData.parentTaskId) {
       cleanData.parentTaskId = formData.parentTaskId
     } else if (formData.parentTaskId === '') {
       cleanData.parentTaskId = null
+    }
+    if (formData.assignedToId) {
+      cleanData.assignedToId = formData.assignedToId
+    } else if (formData.assignedToId === '') {
+      cleanData.assignedToId = null
+    }
+    if (formData.estimatedEffort > 0) cleanData.estimatedEffort = formData.estimatedEffort
+    if (formData.actualEffort > 0) cleanData.actualEffort = formData.actualEffort
+    if (formData.estimatedCost > 0) cleanData.estimatedCost = formData.estimatedCost
+    if (formData.actualCost > 0) cleanData.actualCost = formData.actualCost
+    if (formData.percentComplete !== undefined) cleanData.percentComplete = formData.percentComplete
+    if (formData.jiraIssueKey) cleanData.jiraIssueKey = formData.jiraIssueKey
+    if (formData.jiraIssueId) cleanData.jiraIssueId = formData.jiraIssueId
+    if (formData.constraintDate && formData.constraintDate.trim() !== '') {
+      cleanData.constraintDate = formData.constraintDate
     }
     
     onSubmit(cleanData)
@@ -649,6 +722,22 @@ function TaskForm({ task, projects, tasks, onSubmit, onCancel }: TaskFormProps) 
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
+            {isRTL ? 'نوع تسک' : 'Task Type'}
+          </label>
+          <select
+            value={formData.type}
+            onChange={(e) => setFormData({ ...formData, type: parseInt(e.target.value) })}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            dir={isRTL ? 'rtl' : 'ltr'}
+          >
+            <option value={TaskType.Task}>{isRTL ? 'تسک' : 'Task'}</option>
+            <option value={TaskType.Milestone}>{isRTL ? 'مایلستون' : 'Milestone'}</option>
+            <option value={TaskType.Summary}>{isRTL ? 'خلاصه' : 'Summary'}</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             {t('tasks.priority')}
           </label>
           <select
@@ -676,7 +765,158 @@ function TaskForm({ task, projects, tasks, onSubmit, onCancel }: TaskFormProps) 
           value={formData.endDate}
           onChange={(value) => setFormData({ ...formData, endDate: value })}
         />
+        <PersianDatePicker
+          label={isRTL ? 'تاریخ شروع واقعی' : 'Actual Start Date'}
+          value={formData.actualStartDate}
+          onChange={(value) => setFormData({ ...formData, actualStartDate: value })}
+        />
+        <PersianDatePicker
+          label={isRTL ? 'تاریخ پایان واقعی' : 'Actual End Date'}
+          value={formData.actualEndDate}
+          onChange={(value) => setFormData({ ...formData, actualEndDate: value })}
+        />
       </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Input
+          label={isRTL ? 'مدت (روز)' : 'Duration (days)'}
+          type="number"
+          min="1"
+          value={formData.duration}
+          onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) || 1 })}
+        />
+        <Input
+          label={isRTL ? 'مدت واقعی (روز)' : 'Actual Duration (days)'}
+          type="number"
+          min="0"
+          value={formData.actualDuration}
+          onChange={(e) => setFormData({ ...formData, actualDuration: parseInt(e.target.value) || 0 })}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Input
+          label={isRTL ? 'تلاش برآوردی (ساعت)' : 'Estimated Effort (hours)'}
+          type="number"
+          step="0.1"
+          min="0"
+          value={formData.estimatedEffort}
+          onChange={(e) => setFormData({ ...formData, estimatedEffort: parseFloat(e.target.value) || 0 })}
+        />
+        <Input
+          label={isRTL ? 'تلاش واقعی (ساعت)' : 'Actual Effort (hours)'}
+          type="number"
+          step="0.1"
+          min="0"
+          value={formData.actualEffort}
+          onChange={(e) => setFormData({ ...formData, actualEffort: parseFloat(e.target.value) || 0 })}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Input
+          label={`${isRTL ? 'هزینه برآوردی' : 'Estimated Cost'} (${isRTL ? 'ریال' : 'Rial'})`}
+          type="number"
+          step="0.01"
+          min="0"
+          value={formData.estimatedCost}
+          onChange={(e) => setFormData({ ...formData, estimatedCost: parseFloat(e.target.value) || 0 })}
+        />
+        <Input
+          label={`${isRTL ? 'هزینه واقعی' : 'Actual Cost'} (${isRTL ? 'ریال' : 'Rial'})`}
+          type="number"
+          step="0.01"
+          min="0"
+          value={formData.actualCost}
+          onChange={(e) => setFormData({ ...formData, actualCost: parseFloat(e.target.value) || 0 })}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Input
+          label={isRTL ? 'درصد پیشرفت' : 'Percent Complete'}
+          type="number"
+          min="0"
+          max="100"
+          value={formData.percentComplete}
+          onChange={(e) => setFormData({ ...formData, percentComplete: parseInt(e.target.value) || 0 })}
+        />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {isRTL ? 'اختصاص به' : 'Assigned To'}
+          </label>
+          <select
+            value={formData.assignedToId}
+            onChange={(e) => setFormData({ ...formData, assignedToId: e.target.value })}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            dir={isRTL ? 'rtl' : 'ltr'}
+          >
+            <option value="">{isRTL ? 'اختصاص داده نشده' : 'Not Assigned'}</option>
+            {resources.map((resource) => (
+              <option key={resource.id} value={resource.id}>
+                {resource.fullName}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {isRTL ? 'محدودیت' : 'Constraint'}
+          </label>
+          <select
+            value={formData.constraint}
+            onChange={(e) => setFormData({ ...formData, constraint: parseInt(e.target.value) })}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            dir={isRTL ? 'rtl' : 'ltr'}
+          >
+            <option value={TaskConstraint.AsSoonAsPossible}>{isRTL ? 'در اسرع وقت' : 'As Soon As Possible'}</option>
+            <option value={TaskConstraint.AsLateAsPossible}>{isRTL ? 'در آخرین زمان ممکن' : 'As Late As Possible'}</option>
+            <option value={TaskConstraint.MustStartOn}>{isRTL ? 'باید در تاریخ شروع شود' : 'Must Start On'}</option>
+            <option value={TaskConstraint.MustFinishOn}>{isRTL ? 'باید در تاریخ تمام شود' : 'Must Finish On'}</option>
+            <option value={TaskConstraint.StartNoEarlierThan}>{isRTL ? 'شروع نه زودتر از' : 'Start No Earlier Than'}</option>
+            <option value={TaskConstraint.StartNoLaterThan}>{isRTL ? 'شروع نه دیرتر از' : 'Start No Later Than'}</option>
+            <option value={TaskConstraint.FinishNoEarlierThan}>{isRTL ? 'پایان نه زودتر از' : 'Finish No Earlier Than'}</option>
+            <option value={TaskConstraint.FinishNoLaterThan}>{isRTL ? 'پایان نه دیرتر از' : 'Finish No Later Than'}</option>
+          </select>
+        </div>
+        {(formData.constraint === TaskConstraint.MustStartOn || 
+          formData.constraint === TaskConstraint.MustFinishOn ||
+          formData.constraint === TaskConstraint.StartNoEarlierThan ||
+          formData.constraint === TaskConstraint.StartNoLaterThan ||
+          formData.constraint === TaskConstraint.FinishNoEarlierThan ||
+          formData.constraint === TaskConstraint.FinishNoLaterThan) && (
+          <PersianDatePicker
+            label={isRTL ? 'تاریخ محدودیت' : 'Constraint Date'}
+            value={formData.constraintDate}
+            onChange={(value) => setFormData({ ...formData, constraintDate: value })}
+          />
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Input
+          label={isRTL ? 'کلید Issue جیرا' : 'Jira Issue Key'}
+          value={formData.jiraIssueKey}
+          onChange={(e) => setFormData({ ...formData, jiraIssueKey: e.target.value })}
+          placeholder="PROJ-123"
+        />
+        <Input
+          label={isRTL ? 'شناسه Issue جیرا' : 'Jira Issue ID'}
+          value={formData.jiraIssueId}
+          onChange={(e) => setFormData({ ...formData, jiraIssueId: e.target.value })}
+        />
+      </div>
+
+      <Input
+        label={isRTL ? 'ترتیب نمایش' : 'Display Order'}
+        type="number"
+        min="0"
+        value={formData.displayOrder}
+        onChange={(e) => setFormData({ ...formData, displayOrder: parseInt(e.target.value) || 0 })}
+      />
 
       <div className={`flex items-center ${isRTL ? 'justify-start flex-row-reverse' : 'justify-end'} gap-3 pt-4`}>
         <Button type="button" variant="outline" onClick={onCancel}>

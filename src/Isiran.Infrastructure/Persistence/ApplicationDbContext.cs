@@ -1,3 +1,4 @@
+using Isiran.Domain.Integrations;
 using Isiran.Domain.Notifications;
 using Isiran.Domain.Projects;
 using Isiran.Domain.Resources;
@@ -39,6 +40,19 @@ public class ApplicationDbContext : DbContext
 
     // Notifications
     public DbSet<Notification> Notifications => Set<Notification>();
+
+    // Integrations
+    public DbSet<IntegrationConfig> IntegrationConfigs => Set<IntegrationConfig>();
+    public DbSet<SyncLog> SyncLogs => Set<SyncLog>();
+    public DbSet<JiraProject> JiraProjects => Set<JiraProject>();
+    public DbSet<ConfluencePage> ConfluencePages => Set<ConfluencePage>();
+    public DbSet<PowerBIReport> PowerBIReports => Set<PowerBIReport>();
+
+    // KPIs
+    public DbSet<KPIMetric> KPIMetrics => Set<KPIMetric>();
+
+    // Activity Dependencies
+    public DbSet<ActivityDependency> ActivityDependencies => Set<ActivityDependency>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
