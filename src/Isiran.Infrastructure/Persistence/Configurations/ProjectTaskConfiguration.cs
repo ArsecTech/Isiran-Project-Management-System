@@ -50,6 +50,10 @@ public class ProjectTaskConfiguration : IEntityTypeConfiguration<ProjectTask>
         builder.Property(t => t.ActualCost)
             .HasPrecision(18, 2);
 
+        builder.Property(t => t.PercentComplete);
+        builder.Property(t => t.SelfReportedProgress);
+        builder.Property(t => t.ApprovedProgress);
+
         builder.OwnsOne(t => t.WbsCode, wbs =>
         {
             wbs.Property(w => w.Code)

@@ -86,5 +86,13 @@ public class TasksController : ControllerBase
         await _mediator.Send(command);
         return NoContent();
     }
+
+    [HttpPost("{id}/progress")]
+    public async Task<IActionResult> UpdateTaskProgress(Guid id, [FromBody] UpdateTaskProgressCommand command)
+    {
+        command.TaskId = id;
+        await _mediator.Send(command);
+        return NoContent();
+    }
 }
 

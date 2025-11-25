@@ -74,12 +74,29 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .HasForeignKey(m => m.ProjectId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.Property(p => p.Nature)
+            .HasConversion<int>()
+            .IsRequired();
+
+        builder.Property(p => p.Center)
+            .HasMaxLength(200);
+
+        builder.Property(p => p.SelfReportedProgress);
+
+        builder.Property(p => p.ApprovedProgress);
+
+        builder.Property(p => p.LastUpdatedByExecutor);
+
+        builder.Property(p => p.LastApprovedByClient);
+
         builder.HasIndex(p => p.Code)
             .IsUnique();
 
         builder.HasIndex(p => p.Name);
         builder.HasIndex(p => p.Status);
         builder.HasIndex(p => p.ProjectManagerId);
+        builder.HasIndex(p => p.Nature);
+        builder.HasIndex(p => p.Center);
     }
 }
 

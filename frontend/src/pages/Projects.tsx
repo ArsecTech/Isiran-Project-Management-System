@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { projectApi } from '../services/api'
 import api from '../services/api'
-import { Project, PagedResult, ProjectStatus, ProjectPriority, Resource } from '../types'
-import { Plus, Search, Filter, Edit, Trash2, MoreVertical } from 'lucide-react'
+import { Project, PagedResult, ProjectStatus, ProjectPriority, ProjectNature, Resource } from '../types'
+import { Plus, Search, Filter, Edit, Trash2, MoreVertical, ChevronDown, ChevronUp, Building2 } from 'lucide-react'
 import { useUIStore } from '../store/uiStore'
 import { useProjectStore } from '../store/projectStore'
 import { useI18nStore } from '../store/i18nStore'
@@ -28,7 +28,11 @@ export default function Projects() {
   const [filters, setFilters] = useState({
     status: 'all',
     priority: 'all',
+    nature: 'all',
+    center: 'all',
   })
+  const [groupByCenter, setGroupByCenter] = useState(true)
+  const [expandedCenters, setExpandedCenters] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     loadProjects()
@@ -193,6 +197,23 @@ export default function Projects() {
                 <option value={ProjectPriority.Critical}>{t('projects.priority.critical')}</option>
               </select>
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {isRTL ? 'ماهیت پروژه' : 'Project Nature'}
+              </label>
+              <select
+                value={filters.nature}
+                onChange={(e) => setFilters({ ...filters, nature: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                dir={isRTL ? 'rtl' : 'ltr'}
+              >
+                <option value="all">{isRTL ? 'همه' : 'All'}</option>
+                <option value={ProjectNature.DesignAndImplementation}>{isRTL ? 'طراحی و پیاده‌سازی' : 'Design & Implementation'}</option>
+                <option value={ProjectNature.Support}>{isRTL ? 'پشتیبانی' : 'Support'}</option>
+                <option value={ProjectNature.Development}>{isRTL ? 'توسعه' : 'Development'}</option>
+                <option value={ProjectNature.Procurement}>{isRTL ? 'تامین' : 'Procurement'}</option>
+              </select>
+            </div>
           </div>
         )}
       </Card>
@@ -218,78 +239,54 @@ export default function Projects() {
           </Button>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {projects.map((project) => (
-            <Card
-              key={project.id}
-              className="p-6 hover:shadow-lg transition-shadow"
+        <>
+          {/* Group by Center Toggle */}
+          <div className={`flex items-center justify-between mb-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <div className="flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-gray-600" />
+              <span className="text-sm font-medium text-gray-700">
+                {isRTL ? 'گروه‌بندی بر اساس مرکز' : 'Group by Center'}
+              </span>
+            </div>
+            <button
+              onClick={() => setGroupByCenter(!groupByCenter)}
+              className={`px-4 py-2 rounded-lg transition-all ${
+                groupByCenter
+                  ? 'bg-primary-100 text-primary-700'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <Link
-                    to={`/app/projects/${project.id}`}
-                    className="block group"
-                  >
-                    <h3 className="text-lg font-semibold text-gray-900 group-hover:text-primary-600 transition-colors mb-1">
-                      {project.name}
-                    </h3>
-                    <p className="text-sm text-gray-600">{project.code}</p>
-                  </Link>
-                </div>
-                <div className="relative">
-                  <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
-                    <MoreVertical className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
+              {groupByCenter ? (isRTL ? 'غیرفعال' : 'Disable') : (isRTL ? 'فعال' : 'Enable')}
+            </button>
+          </div>
 
-              <div className="mb-4">
-                {getStatusBadge(project.status)}
-              </div>
-
-              {project.description && (
-                <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                  {project.description}
-                </p>
-              )}
-
-              <div className="space-y-2 mb-4">
-                <div className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
-                  <span className="text-gray-600">{t('projects.progress')}</span>
-                  <span className="font-medium">{project.progressPercentage.toFixed(0)}%</span>
-                </div>
-                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-2 bg-gradient-to-r from-primary-500 to-primary-600 rounded-full transition-all"
-                    style={{ width: `${project.progressPercentage}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className={`flex items-center justify-between pt-4 border-t border-gray-200 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                <div className={`text-sm text-gray-600 ${isRTL ? 'flex-row-reverse' : ''} flex items-center gap-2`}>
-                  <span>{project.taskCount} {t('projects.tasks')}</span>
-                  <span>•</span>
-                  <span>{project.completedTaskCount} {t('projects.completed')}</span>
-                </div>
-                <div className={`flex gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                  <button
-                    onClick={() => setSelectedProject(project)}
-                    className="p-2 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all transform hover:scale-110"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteProject(project.id)}
-                    className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all transform hover:scale-110"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+          {groupByCenter ? (
+            <ProjectsByCenter
+              projects={projects}
+              expandedCenters={expandedCenters}
+              setExpandedCenters={setExpandedCenters}
+              onEdit={setSelectedProject}
+              onDelete={handleDeleteProject}
+              getStatusBadge={getStatusBadge}
+              isRTL={isRTL}
+              t={t}
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {projects.map((project) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  onEdit={() => setSelectedProject(project)}
+                  onDelete={() => handleDeleteProject(project.id)}
+                  getStatusBadge={getStatusBadge}
+                  isRTL={isRTL}
+                  t={t}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Pagination */}
@@ -374,6 +371,8 @@ function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
     description: project?.description || '',
     status: project?.status ?? ProjectStatus.Planning,
     priority: project?.priority ?? ProjectPriority.Medium,
+    nature: project?.nature ?? ProjectNature.DesignAndImplementation,
+    center: project?.center || '',
     startDate: project?.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '',
     endDate: project?.endDate ? new Date(project.endDate).toISOString().split('T')[0] : '',
     actualStartDate: project?.actualStartDate ? new Date(project.actualStartDate).toISOString().split('T')[0] : '',
@@ -382,6 +381,8 @@ function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
     actualCost: project?.actualCost || 0,
     projectManagerId: project?.projectManagerId || '',
     ownerId: project?.ownerId || '',
+    selfReportedProgress: project?.selfReportedProgress ?? undefined,
+    approvedProgress: project?.approvedProgress ?? undefined,
     settings: project?.settings || {
       autoSchedule: true,
       criticalPathEnabled: true,
@@ -465,6 +466,53 @@ function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
             <option value={ProjectPriority.Critical}>{t('projects.priority.critical')}</option>
           </select>
         </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {isRTL ? 'ماهیت پروژه' : 'Project Nature'}
+          </label>
+          <select
+            value={formData.nature}
+            onChange={(e) => setFormData({ ...formData, nature: parseInt(e.target.value) })}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            dir={isRTL ? 'rtl' : 'ltr'}
+          >
+            <option value={ProjectNature.DesignAndImplementation}>{isRTL ? 'طراحی و پیاده‌سازی' : 'Design & Implementation'}</option>
+            <option value={ProjectNature.Support}>{isRTL ? 'پشتیبانی' : 'Support'}</option>
+            <option value={ProjectNature.Development}>{isRTL ? 'توسعه' : 'Development'}</option>
+            <option value={ProjectNature.Procurement}>{isRTL ? 'تامین' : 'Procurement'}</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {isRTL ? 'مرکز/دپارتمان' : 'Center/Department'}
+          </label>
+          <Input
+            value={formData.center}
+            onChange={(e) => setFormData({ ...formData, center: e.target.value })}
+            placeholder={isRTL ? 'نام مرکز را وارد کنید' : 'Enter center name'}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Input
+          label={isRTL ? 'پیشرفت خوداظهاری (%)' : 'Self-Reported Progress (%)'}
+          type="number"
+          min="0"
+          max="100"
+          value={formData.selfReportedProgress ?? ''}
+          onChange={(e) => setFormData({ ...formData, selfReportedProgress: e.target.value ? parseInt(e.target.value) : undefined })}
+        />
+        <Input
+          label={isRTL ? 'پیشرفت تایید شده (%)' : 'Approved Progress (%)'}
+          type="number"
+          min="0"
+          max="100"
+          value={formData.approvedProgress ?? ''}
+          onChange={(e) => setFormData({ ...formData, approvedProgress: e.target.value ? parseInt(e.target.value) : undefined })}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -665,5 +713,235 @@ function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
         </Button>
       </div>
     </form>
+  )
+}
+
+// Project Card Component
+interface ProjectCardProps {
+  project: Project
+  onEdit: () => void
+  onDelete: () => void
+  getStatusBadge: (status: ProjectStatus) => JSX.Element
+  isRTL: boolean
+  t: (key: string) => string
+}
+
+function ProjectCard({ project, onEdit, onDelete, getStatusBadge, isRTL, t }: ProjectCardProps) {
+  const getNatureLabel = (nature: ProjectNature) => {
+    const labels = {
+      [ProjectNature.DesignAndImplementation]: isRTL ? 'طراحی و پیاده‌سازی' : 'Design & Implementation',
+      [ProjectNature.Support]: isRTL ? 'پشتیبانی' : 'Support',
+      [ProjectNature.Development]: isRTL ? 'توسعه' : 'Development',
+      [ProjectNature.Procurement]: isRTL ? 'تامین' : 'Procurement',
+    }
+    return labels[nature] || ''
+  }
+
+  return (
+    <Card className="p-6 hover:shadow-lg transition-shadow">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex-1">
+          <Link
+            to={`/app/projects/${project.id}`}
+            className="block group"
+          >
+            <h3 className="text-lg font-semibold text-gray-900 group-hover:text-primary-600 transition-colors mb-1">
+              {project.name}
+            </h3>
+            <p className="text-sm text-gray-600">{project.code}</p>
+          </Link>
+        </div>
+        <div className="relative">
+          <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+            <MoreVertical className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {getStatusBadge(project.status)}
+        {project.center && (
+          <Badge variant="default">
+            <Building2 className="w-3 h-3 mr-1" />
+            {project.center}
+          </Badge>
+        )}
+        {project.nature !== undefined && (
+          <Badge variant="info">{getNatureLabel(project.nature)}</Badge>
+        )}
+      </div>
+
+      {project.description && (
+        <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+          {project.description}
+        </p>
+      )}
+
+      {project.projectManagerName && (
+        <div className="text-sm text-gray-600 mb-2">
+          <span className="font-medium">{isRTL ? 'مدیر پروژه:' : 'PM:'}</span> {project.projectManagerName}
+        </div>
+      )}
+
+      <div className="space-y-2 mb-4">
+        <div className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
+          <span className="text-gray-600">{isRTL ? 'پیشرفت برنامه‌ای' : 'Planned Progress'}</span>
+          <span className="font-medium">{project.progressPercentage.toFixed(0)}%</span>
+        </div>
+        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div
+            className="h-2 bg-gradient-to-r from-primary-500 to-primary-600 rounded-full transition-all"
+            style={{ width: `${project.progressPercentage}%` }}
+          />
+        </div>
+        {project.selfReportedProgress !== undefined && project.selfReportedProgress !== null && (
+          <>
+            <div className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
+              <span className="text-gray-600">{isRTL ? 'پیشرفت خوداظهاری' : 'Self-Reported'}</span>
+              <span className="font-medium text-orange-600">{project.selfReportedProgress}%</span>
+            </div>
+            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="h-1.5 bg-orange-500 rounded-full transition-all"
+                style={{ width: `${project.selfReportedProgress}%` }}
+              />
+            </div>
+          </>
+        )}
+        {project.approvedProgress !== undefined && project.approvedProgress !== null && (
+          <>
+            <div className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
+              <span className="text-gray-600">{isRTL ? 'پیشرفت تایید شده' : 'Approved Progress'}</span>
+              <span className="font-medium text-green-600">{project.approvedProgress}%</span>
+            </div>
+            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="h-1.5 bg-green-500 rounded-full transition-all"
+                style={{ width: `${project.approvedProgress}%` }}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className={`flex items-center justify-between pt-4 border-t border-gray-200 ${isRTL ? 'flex-row-reverse' : ''}`}>
+        <div className={`text-sm text-gray-600 ${isRTL ? 'flex-row-reverse' : ''} flex items-center gap-2`}>
+          <span>{project.taskCount} {t('projects.tasks')}</span>
+          <span>•</span>
+          <span>{project.completedTaskCount} {t('projects.completed')}</span>
+        </div>
+        <div className={`flex gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+          <button
+            onClick={onEdit}
+            className="p-2 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-all transform hover:scale-110"
+          >
+            <Edit className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all transform hover:scale-110"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+// Projects Grouped by Center Component
+interface ProjectsByCenterProps {
+  projects: Project[]
+  expandedCenters: Set<string>
+  setExpandedCenters: (centers: Set<string>) => void
+  onEdit: (project: Project) => void
+  onDelete: (id: string) => void
+  getStatusBadge: (status: ProjectStatus) => JSX.Element
+  isRTL: boolean
+  t: (key: string) => string
+}
+
+function ProjectsByCenter({
+  projects,
+  expandedCenters,
+  setExpandedCenters,
+  onEdit,
+  onDelete,
+  getStatusBadge,
+  isRTL,
+  t,
+}: ProjectsByCenterProps) {
+  // Group projects by center
+  const projectsByCenter = projects.reduce((acc, project) => {
+    const center = project.center || (isRTL ? 'بدون مرکز' : 'No Center')
+    if (!acc[center]) {
+      acc[center] = []
+    }
+    acc[center].push(project)
+    return acc
+  }, {} as Record<string, Project[]>)
+
+  const toggleCenter = (center: string) => {
+    const newExpanded = new Set(expandedCenters)
+    if (newExpanded.has(center)) {
+      newExpanded.delete(center)
+    } else {
+      newExpanded.add(center)
+    }
+    setExpandedCenters(newExpanded)
+  }
+
+  // Expand all by default
+  useEffect(() => {
+    const allCenters = Object.keys(projectsByCenter)
+    if (expandedCenters.size === 0 && allCenters.length > 0) {
+      setExpandedCenters(new Set(allCenters))
+    }
+  }, [projects.length])
+
+  return (
+    <div className="space-y-4">
+      {Object.entries(projectsByCenter).map(([center, centerProjects]) => {
+        const isExpanded = expandedCenters.has(center)
+        return (
+          <Card key={center} className="overflow-hidden">
+            <button
+              onClick={() => toggleCenter(center)}
+              className={`w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors ${
+                isRTL ? 'flex-row-reverse' : ''
+              }`}
+            >
+              <div className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                <Building2 className="w-5 h-5 text-primary-600" />
+                <h3 className="text-lg font-semibold text-gray-900">{center}</h3>
+                <Badge variant="default">{centerProjects.length} {isRTL ? 'پروژه' : 'Projects'}</Badge>
+              </div>
+              {isExpanded ? (
+                <ChevronUp className="w-5 h-5 text-gray-500" />
+              ) : (
+                <ChevronDown className="w-5 h-5 text-gray-500" />
+              )}
+            </button>
+            {isExpanded && (
+              <div className="p-4 pt-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {centerProjects.map((project) => (
+                    <ProjectCard
+                      key={project.id}
+                      project={project}
+                      onEdit={() => onEdit(project)}
+                      onDelete={() => onDelete(project.id)}
+                      getStatusBadge={getStatusBadge}
+                      isRTL={isRTL}
+                      t={t}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
+        )
+      })}
+    </div>
   )
 }

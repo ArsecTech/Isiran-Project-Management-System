@@ -6,5 +6,6 @@ public interface IExportService
     Task<byte[]> ExportToExcelAsync<T>(List<T> data, string sheetName, CancellationToken cancellationToken = default);
     Task<byte[]> ExportProjectReportToPdfAsync(Guid projectId, CancellationToken cancellationToken = default);
     Task<byte[]> ExportProjectReportToExcelAsync(Guid projectId, CancellationToken cancellationToken = default);
+    Task<byte[]> ExportProjectScheduleToMspAsync(Guid projectId, CancellationToken cancellationToken = default);
 }
 

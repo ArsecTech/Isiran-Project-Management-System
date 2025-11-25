@@ -45,6 +45,31 @@ public class UpdateProjectCommandHandler : IRequestHandler<UpdateProjectCommand,
             project.ChangeStatus(request.Status.Value);
         }
 
+        if (request.Nature.HasValue)
+        {
+            project.UpdateNature(request.Nature.Value);
+        }
+
+        if (request.Center != null)
+        {
+            project.UpdateCenter(request.Center);
+        }
+
+        if (request.ProjectManagerId.HasValue)
+        {
+            project.AssignProjectManager(request.ProjectManagerId.Value);
+        }
+
+        if (request.SelfReportedProgress.HasValue)
+        {
+            project.UpdateSelfReportedProgress(request.SelfReportedProgress);
+        }
+
+        if (request.ApprovedProgress.HasValue)
+        {
+            project.UpdateApprovedProgress(request.ApprovedProgress);
+        }
+
         await _repository.UpdateAsync(project, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

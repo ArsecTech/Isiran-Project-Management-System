@@ -91,6 +91,7 @@ builder.Services.AddScoped<Isiran.Core.Interfaces.IJwtService, Isiran.Infrastruc
 
 // Export Service
 builder.Services.AddScoped<Isiran.Application.Export.Services.IExportService, Isiran.Application.Export.Services.ExportService>();
+builder.Services.AddScoped<Isiran.Application.Import.IProjectScheduleImportService, Isiran.Application.Import.ProjectScheduleImportService>();
 
 // CORS
 builder.Services.AddCors(options =>

@@ -95,6 +95,11 @@ export const taskApi = {
 
   updateDependencies: (id: string, dependencies: any[]) =>
     api.post(`/tasks/${id}/dependencies`, { dependencies }),
+
+  updateProgress: (
+    id: string,
+    data: { selfReportedProgress?: number; approvedProgress?: number }
+  ) => api.post(`/tasks/${id}/progress`, data),
 }
 
 export const ganttApi = {
@@ -106,6 +111,29 @@ export const ganttApi = {
 
   getResourceAllocation: (projectId: string) =>
     api.get(`/gantt/project/${projectId}/resource-allocation`),
+}
+
+export const reportsApi = {
+  exportPdf: (projectId: string) =>
+    api.get(`/reports/project/${projectId}/export/pdf`, { responseType: 'blob' }),
+  exportExcel: (projectId: string) =>
+    api.get(`/reports/project/${projectId}/export/excel`, { responseType: 'blob' }),
+  exportMsp: (projectId: string) =>
+    api.get(`/reports/project/${projectId}/export/msp`, { responseType: 'blob' }),
+  importExcel: (projectId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`/reports/project/${projectId}/import/excel`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  importMsp: (projectId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`/reports/project/${projectId}/import/msp`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
 }
 
 export default api

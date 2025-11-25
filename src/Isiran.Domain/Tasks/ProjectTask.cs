@@ -23,7 +23,9 @@ public class ProjectTask : AggregateRoot
     public decimal? ActualEffort { get; private set; } // in hours
     public decimal? EstimatedCost { get; private set; }
     public decimal? ActualCost { get; private set; }
-    public int? PercentComplete { get; private set; }
+    public int? PercentComplete { get; private set; } // پیشرفت برنامه‌ای (محاسبه شده)
+    public int? SelfReportedProgress { get; private set; } // پیشرفت خوداظهاری
+    public int? ApprovedProgress { get; private set; } // پیشرفت تایید شده
     public Guid? ParentTaskId { get; private set; }
     public Guid? AssignedToId { get; private set; }
     public int DisplayOrder { get; private set; }
@@ -113,6 +115,32 @@ public class ProjectTask : AggregateRoot
     public void UpdateProgress(int percentComplete)
     {
         PercentComplete = Math.Clamp(percentComplete, 0, 100);
+        UpdateTimestamp();
+    }
+
+    public void UpdateSelfReportedProgress(int? progress)
+    {
+        if (progress.HasValue)
+        {
+            SelfReportedProgress = Math.Clamp(progress.Value, 0, 100);
+        }
+        else
+        {
+            SelfReportedProgress = null;
+        }
+        UpdateTimestamp();
+    }
+
+    public void UpdateApprovedProgress(int? progress)
+    {
+        if (progress.HasValue)
+        {
+            ApprovedProgress = Math.Clamp(progress.Value, 0, 100);
+        }
+        else
+        {
+            ApprovedProgress = null;
+        }
         UpdateTimestamp();
     }
 

@@ -35,6 +35,13 @@ export enum DependencyType {
   StartToFinish = 3
 }
 
+export enum ProjectNature {
+  DesignAndImplementation = 0,  // طراحی و پیاده‌سازی
+  Support = 1,                  // پشتیبانی
+  Development = 2,              // توسعه
+  Procurement = 3               // تامین
+}
+
 export interface Project {
   id: string
   name: string
@@ -42,6 +49,8 @@ export interface Project {
   description?: string
   status: ProjectStatus
   priority: ProjectPriority
+  nature: ProjectNature
+  center?: string // مرکز/دپارتمان
   startDate?: string
   endDate?: string
   actualStartDate?: string
@@ -49,13 +58,19 @@ export interface Project {
   budget: number
   actualCost: number
   projectManagerId?: string
+  projectManagerName?: string
   ownerId?: string
+  ownerName?: string
+  selfReportedProgress?: number // درصد پیشرفت خوداظهاری
+  approvedProgress?: number // درصد پیشرفت تایید شده کارفرما
+  lastUpdatedByExecutor?: string // تاریخ آخرین بروزرسانی توسط مجری
+  lastApprovedByClient?: string // تاریخ آخرین اخذ تایید کارفرما
   settings?: any // ProjectSettings JSON
   createdAt: string
   updatedAt?: string
   taskCount: number
   completedTaskCount: number
-  progressPercentage: number
+  progressPercentage: number // پیشرفت برنامه‌ای (محاسبه شده)
 }
 
 export enum TaskType {
@@ -93,7 +108,9 @@ export interface Task {
   actualEffort?: number // in hours
   estimatedCost?: number
   actualCost?: number
-  percentComplete?: number
+  percentComplete?: number // پیشرفت برنامه‌ای (محاسبه شده)
+  selfReportedProgress?: number // پیشرفت خوداظهاری
+  approvedProgress?: number // پیشرفت تایید شده
   parentTaskId?: string
   assignedToId?: string
   assignedToName?: string

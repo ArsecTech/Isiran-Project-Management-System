@@ -1,7 +1,9 @@
 using Isiran.Application.Reporting.Queries;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using System.Globalization;
 using System.Text;
+using System.Xml.Linq;
 
 namespace Isiran.Application.Export.Services;
 
@@ -62,6 +64,47 @@ public class ExportService : IExportService
         }).ToList();
         
         return await ExportToExcelAsync(tasks, "Project Tasks", cancellationToken);
+    }
+
+    public async Task<byte[]> ExportProjectScheduleToMspAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        var query = new GetProjectReportQuery { ProjectId = projectId, Type = ReportType.Detailed };
+        var report = await _mediator.Send(query, cancellationToken);
+
+        var tasksElement = new XElement("Tasks",
+            report.Tasks.Select((task, index) =>
+            {
+                var start = task.StartDate?.ToString("o", CultureInfo.InvariantCulture) ?? string.Empty;
+                var end = task.EndDate?.ToString("o", CultureInfo.InvariantCulture) ?? string.Empty;
+                return new XElement("Task",
+                    new XAttribute("Id", index + 1),
+                    new XElement("Name", task.Name),
+                    new XElement("Status", task.Status),
+                    new XElement("Start", start),
+                    new XElement("Finish", end),
+                    new XElement("PercentComplete", task.PercentComplete ?? 0),
+                    new XElement("Assignee", task.AssignedTo ?? string.Empty)
+                );
+            }));
+
+        var document = new XDocument(
+            new XDeclaration("1.0", "utf-8", "yes"),
+            new XElement("MsProjectSchedule",
+                new XAttribute("GeneratedAt", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)),
+                new XElement("ProjectName", report.ProjectName),
+                new XElement("Summary",
+                    new XElement("StartDate", report.Summary.StartDate?.ToString("o", CultureInfo.InvariantCulture) ?? string.Empty),
+                    new XElement("EndDate", report.Summary.EndDate?.ToString("o", CultureInfo.InvariantCulture) ?? string.Empty),
+                    new XElement("Budget", report.Summary.Budget),
+                    new XElement("ActualCost", report.Summary.ActualCost)
+                ),
+                tasksElement
+            )
+        );
+
+        using var stream = new MemoryStream();
+        document.Save(stream);
+        return stream.ToArray();
     }
 
     private string GenerateHtmlTable<T>(List<T> data, string title)

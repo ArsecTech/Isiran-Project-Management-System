@@ -33,7 +33,9 @@ public class CreateProjectCommandHandler : IRequestHandler<CreateProjectCommand,
             request.Priority,
             request.StartDate,
             request.EndDate,
-            request.Budget);
+            request.Budget,
+            request.Nature,
+            request.Center);
 
         await _repository.AddAsync(project, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
