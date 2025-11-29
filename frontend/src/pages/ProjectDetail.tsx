@@ -1,8 +1,9 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import api, { projectApi, taskApi, reportsApi } from '../services/api'
-import { Project, Task, TaskConstraint, TaskType } from '../types'
+import { Project, Task, TaskConstraint, TaskType, Resource } from '../types'
 import GanttChart from '../components/GanttChart'
+import TaskForm from '../components/TaskForm'
 import { useUIStore } from '../store/uiStore'
 import { useI18nStore } from '../store/i18nStore'
 import Card from '../components/ui/Card'
@@ -22,6 +23,7 @@ import {
   FileText,
   Download,
   UploadCloud,
+  Plus,
 } from 'lucide-react'
 import { formatPersianDate, formatRialSimple } from '../utils/dateUtils'
 
@@ -32,10 +34,14 @@ export default function ProjectDetail() {
   const [project, setProject] = useState<Project | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
   const [projectResources, setProjectResources] = useState<any[]>([])
+  const [allResources, setAllResources] = useState<Resource[]>([])
+  const [allProjects, setAllProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [progressModalTask, setProgressModalTask] = useState<Task | null>(null)
   const [progressValue, setProgressValue] = useState(0)
+  const [showTaskForm, setShowTaskForm] = useState(false)
+  const [selectedTaskForEdit, setSelectedTaskForEdit] = useState<Task | null>(null)
   const { showToast } = useUIStore()
   const { isRTL } = useI18nStore()
   const excelInputRef = useRef<HTMLInputElement | null>(null)
@@ -230,6 +236,8 @@ export default function ProjectDetail() {
       loadProject()
       loadTasks()
       loadProjectResources()
+      loadResources()
+      loadProjects()
     }
   }, [id])
 
@@ -292,6 +300,63 @@ export default function ProjectDetail() {
       console.error('Failed to load project resources:', error)
       setProjectResources([])
     }
+  }
+
+  const loadResources = async () => {
+    try {
+      const response = await api.get('/resources', {
+        params: {
+          pageNumber: 1,
+          pageSize: 1000,
+        },
+      })
+      setAllResources(response.data.items || [])
+    } catch (error) {
+      console.error('Failed to load resources:', error)
+    }
+  }
+
+  const loadProjects = async () => {
+    try {
+      const response = await projectApi.getAll({
+        pageNumber: 1,
+        pageSize: 1000,
+      })
+      setAllProjects(response.data.items || [])
+    } catch (error) {
+      console.error('Failed to load projects:', error)
+    }
+  }
+
+  const handleCreateTask = async (data: Partial<Task>) => {
+    try {
+      if (selectedTaskForEdit) {
+        await taskApi.update(selectedTaskForEdit.id, data)
+        showToast(isRTL ? 'تسک با موفقیت به‌روزرسانی شد' : 'Task updated successfully', 'success')
+      } else {
+        await taskApi.create(data)
+        showToast(isRTL ? 'تسک با موفقیت ایجاد شد' : 'Task created successfully', 'success')
+      }
+      setShowTaskForm(false)
+      setSelectedTaskForEdit(null)
+      loadTasks()
+      loadProject()
+    } catch (error: any) {
+      console.error('Failed to save task:', error)
+      showToast(
+        error.response?.data?.error || (isRTL ? 'خطا در ذخیره تسک' : 'Failed to save task'),
+        'error'
+      )
+    }
+  }
+
+  const handleOpenTaskForm = (task?: Task, defaultDate?: Date) => {
+    if (task) {
+      setSelectedTaskForEdit(task)
+    } else {
+      setSelectedTaskForEdit(null)
+    }
+    setShowTaskForm(true)
   }
 
   if (loading) {
@@ -655,6 +720,14 @@ export default function ProjectDetail() {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      leftIcon={<Plus className="w-4 h-4" />}
+                      onClick={() => handleOpenTaskForm()}
+                      className="bg-gradient-to-r from-primary-600 to-primary-700"
+                    >
+                      {isRTL ? 'تسک جدید' : 'New Task'}
+                    </Button>
                     <Button size="sm" variant="outline" leftIcon={<Download className="w-4 h-4" />} onClick={() => handleExport('pdf')}>
                       PDF
                     </Button>
@@ -829,6 +902,21 @@ export default function ProjectDetail() {
           </div>
         </div>
       </Modal>
+
+      {/* Task Form Modal */}
+      <TaskForm
+        isOpen={showTaskForm}
+        onClose={() => {
+          setShowTaskForm(false)
+          setSelectedTaskForEdit(null)
+        }}
+        onSubmit={handleCreateTask}
+        projects={allProjects}
+        resources={allResources}
+        parentTasks={tasks}
+        initialData={selectedTaskForEdit || undefined}
+        projectId={id}
+      />
     </div>
   )
 }
