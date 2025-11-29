@@ -12,6 +12,7 @@ import {
   User,
   Settings,
   ChevronDown,
+  Building2,
 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
@@ -35,6 +36,7 @@ export default function Layout() {
     { path: '/app/projects', icon: FolderKanban, labelKey: 'nav.projects' },
     { path: '/app/tasks', icon: CheckSquare, labelKey: 'nav.tasks' },
     { path: '/app/resources', icon: Users, labelKey: 'nav.resources' },
+    { path: '/app/organizations', icon: Building2, labelKey: 'nav.organizations' },
     { path: '/app/time-tracking', icon: Clock, labelKey: 'nav.timeTracking' },
   ]
 

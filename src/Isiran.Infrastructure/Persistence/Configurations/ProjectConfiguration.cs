@@ -89,6 +89,11 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
 
         builder.Property(p => p.LastApprovedByClient);
 
+        builder.HasOne(p => p.Organization)
+            .WithMany()
+            .HasForeignKey(p => p.OrganizationId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasIndex(p => p.Code)
             .IsUnique();
 
@@ -97,6 +102,7 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.HasIndex(p => p.ProjectManagerId);
         builder.HasIndex(p => p.Nature);
         builder.HasIndex(p => p.Center);
+        builder.HasIndex(p => p.OrganizationId);
     }
 }
 

@@ -60,6 +60,11 @@ public class UpdateProjectCommandHandler : IRequestHandler<UpdateProjectCommand,
             project.AssignProjectManager(request.ProjectManagerId.Value);
         }
 
+        if (request.OrganizationId.HasValue || request.OrganizationId == null)
+        {
+            project.AssignToOrganization(request.OrganizationId);
+        }
+
         if (request.SelfReportedProgress.HasValue)
         {
             project.UpdateSelfReportedProgress(request.SelfReportedProgress);

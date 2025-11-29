@@ -136,5 +136,25 @@ export const reportsApi = {
   },
 }
 
+export const organizationsApi = {
+  getAll: (params?: {
+    pageNumber?: number
+    pageSize?: number
+    searchTerm?: string
+    parentOrganizationId?: string
+    isActive?: boolean
+  }) => api.get<PagedResult<any>>('/organizations', { params }),
+
+  getTree: () => api.get<any[]>('/organizations/tree'),
+
+  getById: (id: string) => api.get<any>(`/organizations/${id}`),
+
+  create: (data: any) => api.post<string>('/organizations', data),
+
+  update: (id: string, data: any) => api.put(`/organizations/${id}`, data),
+
+  delete: (id: string) => api.delete(`/organizations/${id}`),
+}
+
 export default api
 

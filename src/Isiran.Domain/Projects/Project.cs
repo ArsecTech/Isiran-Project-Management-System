@@ -1,4 +1,5 @@
 using Isiran.Domain.Common;
+using Isiran.Domain.Organizations;
 using Isiran.Domain.Projects.ValueObjects;
 using Isiran.Domain.Tasks;
 
@@ -22,6 +23,7 @@ public class Project : AggregateRoot
     public ProjectSettings? Settings { get; private set; }
     public ProjectNature Nature { get; private set; }
     public string? Center { get; private set; } // مرکز/دپارتمان
+    public Guid? OrganizationId { get; private set; } // سازمان/دپارتمان
     public int? SelfReportedProgress { get; private set; } // درصد پیشرفت خوداظهاری
     public int? ApprovedProgress { get; private set; } // درصد پیشرفت تایید شده کارفرما
     public DateTime? LastUpdatedByExecutor { get; private set; } // تاریخ آخرین بروزرسانی توسط مجری
@@ -31,6 +33,7 @@ public class Project : AggregateRoot
     public virtual ICollection<ProjectTask> Tasks { get; private set; } = new List<ProjectTask>();
     public virtual ICollection<ProjectResource> Resources { get; private set; } = new List<ProjectResource>();
     public virtual ICollection<ProjectMilestone> Milestones { get; private set; } = new List<ProjectMilestone>();
+    public virtual Organization? Organization { get; private set; }
 
     private Project() { }
 
@@ -165,6 +168,12 @@ public class Project : AggregateRoot
             ApprovedProgress = null;
         }
         LastApprovedByClient = DateTime.UtcNow;
+        UpdateTimestamp();
+    }
+
+    public void AssignToOrganization(Guid? organizationId)
+    {
+        OrganizationId = organizationId;
         UpdateTimestamp();
     }
 }

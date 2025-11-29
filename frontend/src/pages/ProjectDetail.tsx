@@ -350,7 +350,7 @@ export default function ProjectDetail() {
     }
   }
 
-  const handleOpenTaskForm = (task?: Task, defaultDate?: Date) => {
+  const handleOpenTaskForm = (task?: Task) => {
     if (task) {
       setSelectedTaskForEdit(task)
     } else {
@@ -817,7 +817,7 @@ export default function ProjectDetail() {
             </Card>
             <Card className="p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">نمودار گانت</h3>
-              {id && <GanttChart projectId={id} />}
+              {id && <GanttChart projectId={id} onTaskCreated={() => { loadTasks(); loadProject(); }} />}
             </Card>
           </div>
         )}

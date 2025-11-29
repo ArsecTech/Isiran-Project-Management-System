@@ -75,6 +75,11 @@ public class ResourceConfiguration : IEntityTypeConfiguration<Resource>
             .HasForeignKey(r => r.ManagerId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        builder.HasOne(r => r.Organization)
+            .WithMany()
+            .HasForeignKey(r => r.OrganizationId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         // Navigation properties are configured in their respective entity configurations
         // (TaskResource and ProjectResource) to avoid circular references
 
@@ -83,6 +88,7 @@ public class ResourceConfiguration : IEntityTypeConfiguration<Resource>
 
         builder.HasIndex(r => r.Status);
         builder.HasIndex(r => r.Type);
+        builder.HasIndex(r => r.OrganizationId);
     }
 }
 

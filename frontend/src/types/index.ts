@@ -61,6 +61,7 @@ export interface Project {
   projectManagerName?: string
   ownerId?: string
   ownerName?: string
+  organizationId?: string // سازمان/دپارتمان
   selfReportedProgress?: number // درصد پیشرفت خوداظهاری
   approvedProgress?: number // درصد پیشرفت تایید شده کارفرما
   lastUpdatedByExecutor?: string // تاریخ آخرین بروزرسانی توسط مجری
@@ -146,6 +147,7 @@ export enum ResourceStatus {
 
 export interface Resource {
   id: string
+  organizationId?: string
   firstName: string
   lastName: string
   fullName: string

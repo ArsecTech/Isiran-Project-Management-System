@@ -1,15 +1,19 @@
 import { useEffect, useState, useRef } from 'react'
-import { ganttApi } from '../services/api'
+import api, { ganttApi, taskApi, projectApi } from '../services/api'
 import { addDays, differenceInDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
 import { formatPersianDate } from '../utils/dateUtils'
 import { Calendar, ChevronDown, ChevronRight, GitBranch, History, Save } from 'lucide-react'
 import { useI18nStore } from '../store/i18nStore'
+import { useUIStore } from '../store/uiStore'
 import Button from './ui/Button'
 import Card from './ui/Card'
 import Badge from './ui/Badge'
+import TaskForm from './TaskForm'
+import type { Task, Project, Resource } from '../types'
 
 interface GanttChartProps {
   projectId: string
+  onTaskCreated?: () => void
 }
 
 interface GanttTask {
@@ -41,7 +45,7 @@ interface GanttVersion {
   description?: string
 }
 
-export default function GanttChart({ projectId }: GanttChartProps) {
+export default function GanttChart({ projectId, onTaskCreated }: GanttChartProps) {
   const [data, setData] = useState<GanttData | null>(null)
   const [loading, setLoading] = useState(true)
   const [zoom, setZoom] = useState<'day' | 'week' | 'month'>('week')
@@ -50,13 +54,31 @@ export default function GanttChart({ projectId }: GanttChartProps) {
   const [selectedVersion, setSelectedVersion] = useState<string | null>(null)
   const [showVersionModal, setShowVersionModal] = useState(false)
   const [newVersionName, setNewVersionName] = useState('')
+  const [showTaskForm, setShowTaskForm] = useState(false)
+  const [selectedTaskForEdit, setSelectedTaskForEdit] = useState<GanttTask | null>(null)
+  const [defaultTaskDate, setDefaultTaskDate] = useState<Date | undefined>()
+  const [projects, setProjects] = useState<Project[]>([])
+  const [resources, setResources] = useState<Resource[]>([])
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [draggedTask, setDraggedTask] = useState<{ taskId: string; startX: number; originalLeft: number } | null>(null)
   const ganttRef = useRef<HTMLDivElement>(null)
+  const timelineRef = useRef<HTMLDivElement>(null)
   const { isRTL } = useI18nStore()
+  const { showToast } = useUIStore()
 
   useEffect(() => {
     loadGanttData()
     loadVersions()
+    loadProjects()
+    loadResources()
+    loadTasks()
   }, [projectId, selectedVersion])
+
+  useEffect(() => {
+    if (projects.length > 0 && resources.length > 0) {
+      // Data ready for TaskForm
+    }
+  }, [projects, resources])
   
   // Ensure expandedTasks is set when data changes
   useEffect(() => {
@@ -179,6 +201,95 @@ export default function GanttChart({ projectId }: GanttChartProps) {
       { id: 'current', name: 'نسخه فعلی', createdAt: new Date().toISOString() },
       { id: 'v1', name: 'نسخه 1.0', createdAt: new Date().toISOString() },
     ])
+  }
+
+  const loadProjects = async () => {
+    try {
+      const response = await projectApi.getAll({ pageNumber: 1, pageSize: 1000 })
+      setProjects(response.data.items || [])
+    } catch (error) {
+      console.error('Failed to load projects:', error)
+    }
+  }
+
+  const loadResources = async () => {
+    try {
+      const response = await api.get('/resources', { params: { pageNumber: 1, pageSize: 1000 } })
+      setResources(response.data.items || [])
+    } catch (error) {
+      console.error('Failed to load resources:', error)
+    }
+  }
+
+  const loadTasks = async () => {
+    try {
+      const response = await taskApi.getAll({ pageNumber: 1, pageSize: 1000, projectId })
+      setTasks(response.data.items || [])
+    } catch (error) {
+      console.error('Failed to load tasks:', error)
+    }
+  }
+
+  const handleCreateTask = async (taskData: Partial<Task>) => {
+    try {
+      if (selectedTaskForEdit) {
+        // Find the actual task
+        const actualTask = tasks.find(t => t.id === selectedTaskForEdit.taskId)
+        if (actualTask) {
+          await taskApi.update(actualTask.id, taskData)
+          showToast(isRTL ? 'تسک با موفقیت به‌روزرسانی شد' : 'Task updated successfully', 'success')
+        }
+      } else {
+        await taskApi.create({
+          ...taskData,
+          projectId: projectId,
+        })
+        showToast(isRTL ? 'تسک با موفقیت ایجاد شد' : 'Task created successfully', 'success')
+      }
+      setShowTaskForm(false)
+      setSelectedTaskForEdit(null)
+      setDefaultTaskDate(undefined)
+      loadGanttData()
+      loadTasks()
+      if (onTaskCreated) {
+        onTaskCreated()
+      }
+    } catch (error: any) {
+      console.error('Failed to save task:', error)
+      showToast(
+        error.response?.data?.error || (isRTL ? 'خطا در ذخیره تسک' : 'Failed to save task'),
+        'error'
+      )
+    }
+  }
+
+  const handleTimelineDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!timelineRef.current || !data) return
+
+    const rect = timelineRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const width = rect.width
+    const startDate = data.projectStartDate ? new Date(data.projectStartDate) : new Date()
+    const totalDays = differenceInDays(
+      data.projectEndDate ? new Date(data.projectEndDate) : addDays(startDate, data.totalDuration),
+      startDate
+    ) + 1
+
+    const clickedDay = Math.floor((x / width) * totalDays)
+    const taskStartDate = addDays(startDate, clickedDay)
+    
+    setDefaultTaskDate(taskStartDate)
+    setSelectedTaskForEdit(null)
+    setShowTaskForm(true)
+  }
+
+  const handleTaskDoubleClick = (task: GanttTask) => {
+    const actualTask = tasks.find(t => t.id === task.taskId)
+    if (actualTask) {
+      setSelectedTaskForEdit(task)
+      setDefaultTaskDate(undefined)
+      setShowTaskForm(true)
+    }
   }
 
   const buildHierarchicalTasks = (tasks: any[]): GanttTask[] => {
@@ -539,23 +650,6 @@ export default function GanttChart({ projectId }: GanttChartProps) {
     }
   }
 
-  const getTaskColor = (task: GanttTask) => {
-    if (task.isOnCriticalPath) {
-      return 'bg-gradient-to-r from-red-500 via-red-600 to-red-700 shadow-lg shadow-red-500/50'
-    }
-    // Different colors for different levels (up to 3 levels)
-    const level = task.level || 0
-    if (level === 0) {
-      // Root level - blue
-      return 'bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 shadow-md shadow-blue-500/30'
-    } else if (level === 1) {
-      // Second level - indigo
-      return 'bg-gradient-to-r from-indigo-500 via-indigo-600 to-indigo-700 shadow-md shadow-indigo-500/30'
-    } else {
-      // Third level and beyond - purple
-      return 'bg-gradient-to-r from-purple-500 via-purple-600 to-purple-700 shadow-md shadow-purple-500/30'
-    }
-  }
 
   const getStatusColor = (status?: number) => {
     switch (status) {
@@ -662,28 +756,31 @@ export default function GanttChart({ projectId }: GanttChartProps) {
         )}
 
         <div
-          className={`flex border-b-2 transition-all duration-300 group relative min-w-max ${
+          className={`flex border-b border-gray-300 transition-all duration-200 group relative min-w-max bg-white hover:bg-gray-50 ${
             taskLevel === 0 
-              ? 'border-blue-200/50 bg-gradient-to-r from-blue-50/40 via-white to-white hover:from-blue-50 hover:via-blue-50/30 hover:to-white hover:shadow-md' 
+              ? 'border-b-2 border-gray-400' 
               : taskLevel === 1
-              ? 'border-indigo-200/50 bg-gradient-to-r from-indigo-50/30 via-white to-white hover:from-indigo-50 hover:via-indigo-50/20 hover:to-white hover:shadow-md'
-              : 'border-purple-200/50 bg-gradient-to-r from-purple-50/20 via-white to-white hover:from-purple-50 hover:via-purple-50/10 hover:to-white hover:shadow-md'
+              ? 'border-b border-gray-300'
+              : 'border-b border-gray-200'
           }`}
-          style={{ minHeight: hasSubTasks ? '80px' : '70px' }}
+          style={{ minHeight: hasSubTasks ? '60px' : '50px' }}
         >
-          {/* Task Name Column */}
+          {/* Task Name Column - MSP Style */}
           <div 
-            className={`w-72 border-r-2 border-gray-200 p-5 flex items-center transition-all duration-300 relative z-10 shrink-0 sticky left-0 backdrop-blur-sm ${
+            className={`w-80 border-r bg-white p-4 flex items-center transition-all duration-300 relative z-10 shrink-0 sticky left-0 ${
               taskLevel === 0 
-                ? 'bg-gradient-to-br from-blue-50/60 via-blue-50/30 to-white shadow-sm' 
+                ? 'bg-gradient-to-br from-gray-50 to-white' 
                 : taskLevel === 1
-                ? 'bg-gradient-to-br from-indigo-50/40 via-indigo-50/20 to-white shadow-sm'
-                : 'bg-gradient-to-br from-purple-50/20 to-white shadow-sm'
+                ? 'bg-gradient-to-br from-gray-50/80 to-white'
+                : 'bg-white'
             }`}
             style={{ 
               paddingLeft: `${20 + indentLevel}px`,
-              paddingRight: '20px',
+              paddingRight: '16px',
               left: '0',
+              boxShadow: taskLevel === 0 ? '2px 0 4px rgba(0,0,0,0.1)' : 'none',
+              borderRightWidth: taskLevel === 0 ? '4px' : taskLevel === 1 ? '3px' : '2px',
+              borderRightColor: taskLevel === 0 ? '#9ca3af' : taskLevel === 1 ? '#d1d5db' : '#e5e7eb',
             }}
           >
             <div className="flex-1 flex items-center gap-3">
@@ -756,24 +853,53 @@ export default function GanttChart({ projectId }: GanttChartProps) {
             </div>
           </div>
 
-          {/* Timeline Column */}
-          <div className="flex-1 relative bg-gradient-to-b from-gray-50 via-white to-gray-50/50 min-w-max">
-            {/* Grid Lines */}
+          {/* Timeline Column - MSP Style */}
+          <div
+            ref={timelineRef}
+            className="flex-1 relative bg-white min-w-max cursor-crosshair border-l-2 border-gray-300"
+            onDoubleClick={handleTimelineDoubleClick}
+            title={isRTL ? 'دوبار کلیک برای ایجاد تسک جدید' : 'Double-click to create new task'}
+          >
+            {/* Grid Lines - MSP Style */}
             <div className="absolute inset-0 flex min-w-max">
-              {dateHeaders.map((_, idx) => (
-                <div
-                  key={idx}
-                  className={`w-36 border-r-2 shrink-0 transition-colors ${
-                    idx % 7 === 0 ? 'border-primary-300 bg-primary-50/20' : 'border-gray-200'
-                  } ${idx % 7 === 0 ? 'border-solid' : 'border-dashed'}`}
-                ></div>
-              ))}
+              {dateHeaders.map((_, idx) => {
+                const isWeekend = dateHeaders[idx]?.isWeekend
+                const isMajorGrid = idx % 7 === 0
+                return (
+                  <div
+                    key={idx}
+                    className={`w-36 shrink-0 border-r ${
+                      isMajorGrid 
+                        ? 'bg-gray-50/50' 
+                        : isWeekend
+                        ? 'bg-red-50/30'
+                        : 'bg-white'
+                    }`}
+                    style={{
+                      borderRightWidth: isMajorGrid ? '3px' : isWeekend ? '2px' : '1px',
+                      borderRightColor: isMajorGrid ? '#9ca3af' : isWeekend ? '#fecaca' : '#e5e7eb',
+                    }}
+                  ></div>
+                )
+              })}
             </div>
+            
+            {/* Vertical Grid Lines for Days */}
+            {zoom === 'day' && (
+              <div className="absolute inset-0 flex min-w-max pointer-events-none">
+                {dateHeaders.map((_, idx) => (
+                  <div
+                    key={`day-${idx}`}
+                    className="w-36 border-r border-gray-100 shrink-0"
+                  ></div>
+                ))}
+              </div>
+            )}
 
-            {/* Summary Bar for Parent Tasks */}
+            {/* Summary Bar for Parent Tasks - MSP Style */}
             {summaryBar && (
               <div
-                className="absolute top-3 h-4 rounded-full bg-gradient-to-r from-gray-400 via-gray-500 to-gray-600 opacity-50 border-2 border-dashed border-gray-600 z-0 shadow-lg"
+                className="absolute top-3 h-3 rounded bg-gray-500 border-2 border-dashed border-gray-700 z-0 shadow-md"
                 style={{
                   left: `${summaryBar.position.left}%`,
                   width: `${summaryBar.position.width}%`,
@@ -783,61 +909,98 @@ export default function GanttChart({ projectId }: GanttChartProps) {
               />
             )}
 
-            {/* Task Bar */}
+            {/* Task Bar - MSP Style */}
             {task.calculatedStartDate && task.calculatedEndDate && (
-              <div
-                className={`absolute top-1/2 -translate-y-1/2 rounded-xl ${getTaskColor(
-                  task
-                )} text-white flex items-center justify-between px-4 cursor-pointer transition-all duration-300 hover:scale-110 hover:shadow-2xl hover:z-20 group/task border-3 border-white/40 shadow-xl ${
-                  hasSubTasks ? 'h-14' : 'h-12'
-                }`}
-                style={{
-                  left: `${position.left}%`,
-                  width: `${position.width}%`,
-                  minWidth: '80px',
-                }}
-                title={`${task.taskName}\n${formatPersianDate(
-                  task.calculatedStartDate
-                )} - ${formatPersianDate(task.calculatedEndDate)}\n${
-                  task.calculatedDuration
-                } ${isRTL ? 'روز' : 'days'}\n${task.percentComplete !== undefined ? `${task.percentComplete}% ${isRTL ? 'تکمیل شده' : 'Complete'}` : ''}`}
-              >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className={`w-3 h-3 bg-white rounded-full shadow-lg flex-shrink-0 ${
-                    task.isOnCriticalPath ? 'animate-pulse ring-2 ring-red-300' : ''
-                  }`}></div>
-                  <span className={`font-bold truncate ${
-                    hasSubTasks ? 'text-sm' : 'text-xs'
-                  }`}>
-                    {task.taskName}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2.5 flex-shrink-0">
+              <>
+                {/* Main Task Bar */}
+                <div
+                  className={`absolute top-1/2 -translate-y-1/2 rounded ${
+                    task.isOnCriticalPath
+                      ? 'bg-gradient-to-r from-red-600 via-red-700 to-red-800 border-2 border-red-900 shadow-lg shadow-red-500/50'
+                      : hasSubTasks
+                      ? 'bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 border-2 border-blue-800 shadow-md'
+                      : 'bg-gradient-to-r from-blue-400 via-blue-500 to-blue-600 border-2 border-blue-700 shadow-md'
+                  } text-white flex items-center justify-between px-3 cursor-move transition-all duration-200 hover:shadow-xl hover:z-20 group/task ${
+                    hasSubTasks ? 'h-10' : 'h-8'
+                  } ${draggedTask?.taskId === task.taskId ? 'opacity-80' : ''}`}
+                  style={{
+                    left: `${position.left}%`,
+                    width: `${position.width}%`,
+                    minWidth: '60px',
+                  }}
+                  title={`${task.taskName}\n${formatPersianDate(
+                    task.calculatedStartDate
+                  )} - ${formatPersianDate(task.calculatedEndDate)}\n${
+                    task.calculatedDuration
+                  } ${isRTL ? 'روز' : 'days'}\n${task.percentComplete !== undefined ? `${task.percentComplete}% ${isRTL ? 'تکمیل شده' : 'Complete'}` : ''}\n${isRTL ? 'دوبار کلیک برای ویرایش' : 'Double-click to edit'}`}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation()
+                    handleTaskDoubleClick(task)
+                  }}
+                  onMouseDown={(e) => {
+                    if (e.detail === 1) {
+                      setDraggedTask({
+                        taskId: task.taskId,
+                        startX: e.clientX,
+                        originalLeft: position.left,
+                      })
+                    }
+                  }}
+                >
+                  {/* Progress Fill Inside Bar - MSP Style */}
                   {task.percentComplete !== undefined && task.percentComplete > 0 && (
-                    <div className="text-xs font-bold bg-white/40 px-2.5 py-1 rounded-lg shadow-md backdrop-blur-sm">
-                      {task.percentComplete}%
-                    </div>
+                    <div
+                      className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-green-500 via-green-600 to-green-700 rounded-l border-r-2 border-green-800"
+                      style={{
+                        width: `${task.percentComplete}%`,
+                      }}
+                    />
                   )}
-                  <div className="text-xs font-bold bg-white/30 px-2.5 py-1 rounded-lg whitespace-nowrap shadow-md backdrop-blur-sm">
-                    {task.calculatedDuration} {isRTL ? 'روز' : 'd'}
+                  
+                  {/* Task Name and Info */}
+                  <div className="flex items-center gap-2 flex-1 min-w-0 relative z-10">
+                    <div className={`w-2 h-2 rounded-full bg-white flex-shrink-0 ${
+                      task.isOnCriticalPath ? 'animate-pulse ring-1 ring-red-200' : ''
+                    }`}></div>
+                    <span className={`font-semibold truncate ${
+                      hasSubTasks ? 'text-xs' : 'text-[10px]'
+                    } drop-shadow-sm`}>
+                      {task.taskName}
+                    </span>
+                  </div>
+                  
+                  {/* Duration Badge */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0 relative z-10">
+                    {task.percentComplete !== undefined && task.percentComplete > 0 && (
+                      <div className="text-[10px] font-bold bg-white/50 px-1.5 py-0.5 rounded shadow-sm backdrop-blur-sm">
+                        {task.percentComplete}%
+                      </div>
+                    )}
+                    <div className="text-[10px] font-bold bg-white/40 px-1.5 py-0.5 rounded whitespace-nowrap shadow-sm backdrop-blur-sm">
+                      {task.calculatedDuration}d
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
 
-            {/* Progress Indicator on Task Bar */}
-            {task.percentComplete !== undefined && task.percentComplete > 0 && 
-             task.calculatedStartDate && task.calculatedEndDate && (
-              <div
-                className={`absolute top-1/2 translate-y-3 rounded-full h-2 bg-gradient-to-r from-green-400 via-green-500 to-emerald-600 shadow-lg ${
-                  task.isOnCriticalPath ? 'ring-2 ring-red-400' : ''
-                }`}
-                style={{
-                  left: `${position.left}%`,
-                  width: `${(position.width * task.percentComplete) / 100}%`,
-                  minWidth: '6px',
-                }}
-              />
+                {/* Left Handle for Resize - MSP Style */}
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-1.5 h-full bg-gray-500/40 hover:bg-gray-600/60 cursor-ew-resize transition-colors z-30 rounded-l"
+                  style={{
+                    left: `${position.left}%`,
+                  }}
+                  title={isRTL ? 'کشیدن برای تغییر تاریخ شروع' : 'Drag to change start date'}
+                />
+
+                {/* Right Handle for Resize - MSP Style */}
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-1.5 h-full bg-gray-500/40 hover:bg-gray-600/60 cursor-ew-resize transition-colors z-30 rounded-r"
+                  style={{
+                    left: `${position.left + position.width}%`,
+                    transform: 'translate(-100%, -50%)',
+                  }}
+                  title={isRTL ? 'کشیدن برای تغییر تاریخ پایان' : 'Drag to change end date'}
+                />
+              </>
             )}
           </div>
         </div>
@@ -1012,8 +1175,8 @@ export default function GanttChart({ projectId }: GanttChartProps) {
         </div>
       </Card>
 
-      {/* Gantt Chart */}
-      <Card className="p-0 overflow-hidden bg-gradient-to-br from-white via-gray-50/50 to-white shadow-2xl border-2 border-gray-200">
+      {/* Gantt Chart - MSP Style */}
+      <Card className="p-0 overflow-hidden bg-white shadow-2xl border-4 border-gray-400">
         <div 
           ref={ganttRef} 
           className="overflow-auto scrollbar-thin scrollbar-thumb-primary-400 scrollbar-track-gray-100 hover:scrollbar-thumb-primary-500"
@@ -1024,35 +1187,46 @@ export default function GanttChart({ projectId }: GanttChartProps) {
           }}
         >
           <div className="inline-block min-w-full">
-            {/* Sticky Header */}
-            <div className="sticky top-0 z-20 bg-gradient-to-r from-primary-50 via-white to-primary-50 border-b-4 border-primary-300 shadow-xl">
+            {/* Sticky Header - MSP Style */}
+            <div className="sticky top-0 z-20 bg-gradient-to-b from-gray-100 via-gray-50 to-white border-b-4 border-gray-400 shadow-lg">
               <div className="flex min-w-max">
-                <div className="w-72 border-r-4 border-primary-300 p-5 bg-gradient-to-br from-primary-50 to-white font-bold text-gray-900 flex items-center shrink-0 sticky left-0 z-30 shadow-xl backdrop-blur-sm">
-                  <span className="text-base">{isRTL ? 'نام تسک' : 'Task Name'}</span>
+                <div className="w-80 border-r-4 border-gray-400 p-4 bg-gradient-to-b from-gray-200 to-gray-100 font-bold text-gray-900 flex items-center shrink-0 sticky left-0 z-30 shadow-lg border-b-4 border-gray-400">
+                  <span className="text-sm font-bold">{isRTL ? 'نام تسک' : 'Task Name'}</span>
             </div>
-                <div className="flex min-w-max">
-              {dateHeaders.map((header, index) => (
-                <div
-                  key={index}
-                      className={`w-36 border-r-2 border-gray-200 p-4 text-center shrink-0 transition-colors ${
-                        header.isWeekend ? 'bg-gradient-to-b from-red-50 to-red-100 border-red-200' : 'bg-white hover:bg-gray-50'
-                      }`}
-                >
-                      <div className="text-sm font-bold text-gray-900 whitespace-nowrap">
-                  {header.label}
-                      </div>
-                      <div className="text-xs text-gray-600 mt-1.5 whitespace-nowrap font-medium">
-                        {formatPersianDate(header.date)}
-                      </div>
-                </div>
-              ))}
+                <div className="flex min-w-max border-b-4 border-gray-400">
+              {dateHeaders.map((header, index) => {
+                const isWeekend = header.isWeekend
+                const isMajorGrid = index % 7 === 0
+                return (
+                  <div
+                    key={index}
+                    className={`w-36 border-r shrink-0 p-3 text-center ${
+                      isWeekend 
+                        ? 'bg-gradient-to-b from-red-100 to-red-50 border-red-300 border-r-2' 
+                        : isMajorGrid
+                        ? 'bg-gradient-to-b from-gray-100 to-gray-50 border-gray-400 border-r-3'
+                        : 'bg-white border-gray-200 border-r'
+                    }`}
+                    style={{
+                      borderRightWidth: isMajorGrid ? '3px' : isWeekend ? '2px' : '1px',
+                    }}
+                  >
+                    <div className="text-xs font-bold text-gray-900 whitespace-nowrap">
+                      {header.label}
+                    </div>
+                    <div className="text-[10px] text-gray-600 mt-1 whitespace-nowrap font-medium">
+                      {formatPersianDate(header.date)}
+                    </div>
+                  </div>
+                )
+              })}
                 </div>
             </div>
           </div>
 
           {/* Tasks - Only render root tasks, subTasks will be rendered recursively */}
           {/* CRITICAL: rootTasksOnly should ONLY contain root tasks (no children) */}
-            <div className="bg-white relative min-w-max">
+            <div className="bg-white relative min-w-max border-t-2 border-gray-300">
               {(() => {
                 const renderedTaskIds = new Set<string>()
                 return rootTasksOnly
@@ -1135,6 +1309,23 @@ export default function GanttChart({ projectId }: GanttChartProps) {
         </div>
       </div>
       )}
+
+      {/* Task Form Modal */}
+      <TaskForm
+        isOpen={showTaskForm}
+        onClose={() => {
+          setShowTaskForm(false)
+          setSelectedTaskForEdit(null)
+          setDefaultTaskDate(undefined)
+        }}
+        onSubmit={handleCreateTask}
+        projects={projects}
+        resources={resources}
+        parentTasks={tasks}
+        initialData={selectedTaskForEdit ? tasks.find(t => t.id === selectedTaskForEdit.taskId) : undefined}
+        projectId={projectId}
+        defaultStartDate={defaultTaskDate}
+      />
     </div>
   )
 }

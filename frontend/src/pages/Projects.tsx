@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { projectApi } from '../services/api'
-import api from '../services/api'
+import api, { organizationsApi } from '../services/api'
 import { Project, PagedResult, ProjectStatus, ProjectPriority, ProjectNature, Resource } from '../types'
 import { Plus, Search, Filter, Edit, Trash2, MoreVertical, ChevronDown, ChevronUp, Building2 } from 'lucide-react'
 import { useUIStore } from '../store/uiStore'
@@ -351,9 +351,11 @@ interface ProjectFormProps {
 function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
   const { t, isRTL } = useI18nStore()
   const [resources, setResources] = useState<Resource[]>([])
+  const [organizations, setOrganizations] = useState<any[]>([])
 
   useEffect(() => {
     loadResources()
+    loadOrganizations()
   }, [])
 
   const loadResources = async () => {
@@ -365,36 +367,49 @@ function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
     }
   }
 
+  const loadOrganizations = async () => {
+    try {
+      const response = await organizationsApi.getAll({ pageNumber: 1, pageSize: 1000 })
+      setOrganizations(response.data.items || [])
+    } catch (error) {
+      console.error('Failed to load organizations:', error)
+    }
+  }
+
   const [formData, setFormData] = useState({
     name: project?.name || '',
     code: project?.code || '',
     description: project?.description || '',
-    status: project?.status ?? ProjectStatus.Planning,
     priority: project?.priority ?? ProjectPriority.Medium,
     nature: project?.nature ?? ProjectNature.DesignAndImplementation,
     center: project?.center || '',
+    organizationId: project?.organizationId || '',
     startDate: project?.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '',
     endDate: project?.endDate ? new Date(project.endDate).toISOString().split('T')[0] : '',
-    actualStartDate: project?.actualStartDate ? new Date(project.actualStartDate).toISOString().split('T')[0] : '',
-    actualEndDate: project?.actualEndDate ? new Date(project.actualEndDate).toISOString().split('T')[0] : '',
     budget: project?.budget || 0,
-    actualCost: project?.actualCost || 0,
     projectManagerId: project?.projectManagerId || '',
     ownerId: project?.ownerId || '',
-    selfReportedProgress: project?.selfReportedProgress ?? undefined,
-    approvedProgress: project?.approvedProgress ?? undefined,
-    settings: project?.settings || {
-      autoSchedule: true,
-      criticalPathEnabled: true,
-      resourceLevelingEnabled: true,
-      workingHoursPerDay: 8,
-      workingDaysPerWeek: 5,
-      calendarId: 'Standard',
-      allowOvertime: false,
-      defaultHourlyRate: 0,
-      currency: 'IRR',
-      timeZone: 'Asia/Tehran'
-    },
+    // Only include these fields when editing
+    ...(project ? {
+      status: project.status ?? ProjectStatus.Planning,
+      actualStartDate: project.actualStartDate ? new Date(project.actualStartDate).toISOString().split('T')[0] : '',
+      actualEndDate: project.actualEndDate ? new Date(project.actualEndDate).toISOString().split('T')[0] : '',
+      actualCost: project.actualCost || 0,
+      selfReportedProgress: project.selfReportedProgress ?? undefined,
+      approvedProgress: project.approvedProgress ?? undefined,
+      settings: project.settings || {
+        autoSchedule: true,
+        criticalPathEnabled: true,
+        resourceLevelingEnabled: true,
+        workingHoursPerDay: 8,
+        workingDaysPerWeek: 5,
+        calendarId: 'Standard',
+        allowOvertime: false,
+        defaultHourlyRate: 0,
+        currency: 'IRR',
+        timeZone: 'Asia/Tehran'
+      },
+    } : {}),
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -432,23 +447,25 @@ function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            {t('projects.status')}
-          </label>
-          <select
-            value={formData.status}
-            onChange={(e) => setFormData({ ...formData, status: parseInt(e.target.value) })}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
-            dir={isRTL ? 'rtl' : 'ltr'}
-          >
-            <option value={ProjectStatus.Planning}>{t('projects.status.planning')}</option>
-            <option value={ProjectStatus.InProgress}>{t('projects.status.inProgress')}</option>
-            <option value={ProjectStatus.OnHold}>{t('projects.status.onHold')}</option>
-            <option value={ProjectStatus.Completed}>{t('projects.status.completed')}</option>
-            <option value={ProjectStatus.Cancelled}>{t('projects.status.cancelled')}</option>
-          </select>
-        </div>
+        {project && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {t('projects.status')}
+            </label>
+            <select
+              value={formData.status}
+              onChange={(e) => setFormData({ ...formData, status: parseInt(e.target.value) })}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+              dir={isRTL ? 'rtl' : 'ltr'}
+            >
+              <option value={ProjectStatus.Planning}>{t('projects.status.planning')}</option>
+              <option value={ProjectStatus.InProgress}>{t('projects.status.inProgress')}</option>
+              <option value={ProjectStatus.OnHold}>{t('projects.status.onHold')}</option>
+              <option value={ProjectStatus.Completed}>{t('projects.status.completed')}</option>
+              <option value={ProjectStatus.Cancelled}>{t('projects.status.cancelled')}</option>
+            </select>
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -486,33 +503,32 @@ function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            {isRTL ? 'مرکز/دپارتمان' : 'Center/Department'}
+            {t('projects.organization')}
+          </label>
+          <select
+            value={formData.organizationId}
+            onChange={(e) => setFormData({ ...formData, organizationId: e.target.value })}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            dir={isRTL ? 'rtl' : 'ltr'}
+          >
+            <option value="">{t('projects.selectOrganization')}</option>
+            {organizations.map((org) => (
+              <option key={org.id} value={org.id}>
+                {org.name} {org.code ? `(${org.code})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {t('projects.center')}
           </label>
           <Input
             value={formData.center}
             onChange={(e) => setFormData({ ...formData, center: e.target.value })}
-            placeholder={isRTL ? 'نام مرکز را وارد کنید' : 'Enter center name'}
+            placeholder={t('projects.centerPlaceholder')}
           />
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <Input
-          label={isRTL ? 'پیشرفت خوداظهاری (%)' : 'Self-Reported Progress (%)'}
-          type="number"
-          min="0"
-          max="100"
-          value={formData.selfReportedProgress ?? ''}
-          onChange={(e) => setFormData({ ...formData, selfReportedProgress: e.target.value ? parseInt(e.target.value) : undefined })}
-        />
-        <Input
-          label={isRTL ? 'پیشرفت تایید شده (%)' : 'Approved Progress (%)'}
-          type="number"
-          min="0"
-          max="100"
-          value={formData.approvedProgress ?? ''}
-          onChange={(e) => setFormData({ ...formData, approvedProgress: e.target.value ? parseInt(e.target.value) : undefined })}
-        />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -526,16 +542,20 @@ function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
           value={formData.endDate}
           onChange={(value) => setFormData({ ...formData, endDate: value })}
         />
-        <PersianDatePicker
-          label={isRTL ? 'تاریخ شروع واقعی' : 'Actual Start Date'}
-          value={formData.actualStartDate}
-          onChange={(value) => setFormData({ ...formData, actualStartDate: value })}
-        />
-        <PersianDatePicker
-          label={isRTL ? 'تاریخ پایان واقعی' : 'Actual End Date'}
-          value={formData.actualEndDate}
-          onChange={(value) => setFormData({ ...formData, actualEndDate: value })}
-        />
+        {project && (
+          <>
+            <PersianDatePicker
+              label={isRTL ? 'تاریخ شروع واقعی' : 'Actual Start Date'}
+              value={formData.actualStartDate}
+              onChange={(value) => setFormData({ ...formData, actualStartDate: value })}
+            />
+            <PersianDatePicker
+              label={isRTL ? 'تاریخ پایان واقعی' : 'Actual End Date'}
+              value={formData.actualEndDate}
+              onChange={(value) => setFormData({ ...formData, actualEndDate: value })}
+            />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -547,15 +567,38 @@ function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
           value={formData.budget}
           onChange={(e) => setFormData({ ...formData, budget: parseFloat(e.target.value) || 0 })}
         />
-        <Input
-          label={`${isRTL ? 'هزینه واقعی' : 'Actual Cost'} (${isRTL ? 'ریال' : 'Rial'})`}
-          type="number"
-          step="0.01"
-          min="0"
-          value={formData.actualCost}
-          onChange={(e) => setFormData({ ...formData, actualCost: parseFloat(e.target.value) || 0 })}
-        />
+        {project && (
+          <Input
+            label={`${isRTL ? 'هزینه واقعی' : 'Actual Cost'} (${isRTL ? 'ریال' : 'Rial'})`}
+            type="number"
+            step="0.01"
+            min="0"
+            value={formData.actualCost}
+            onChange={(e) => setFormData({ ...formData, actualCost: parseFloat(e.target.value) || 0 })}
+          />
+        )}
       </div>
+
+      {project && (
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label={isRTL ? 'پیشرفت خوداظهاری (%)' : 'Self-Reported Progress (%)'}
+            type="number"
+            min="0"
+            max="100"
+            value={formData.selfReportedProgress ?? ''}
+            onChange={(e) => setFormData({ ...formData, selfReportedProgress: e.target.value ? parseInt(e.target.value) : undefined })}
+          />
+          <Input
+            label={isRTL ? 'پیشرفت تایید شده (%)' : 'Approved Progress (%)'}
+            type="number"
+            min="0"
+            max="100"
+            value={formData.approvedProgress ?? ''}
+            onChange={(e) => setFormData({ ...formData, approvedProgress: e.target.value ? parseInt(e.target.value) : undefined })}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -596,9 +639,10 @@ function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
         </div>
       </div>
 
-      {/* Project Settings Section */}
-      <div className="border-t border-gray-200 pt-4 mt-4">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">{isRTL ? 'تنظیمات پروژه' : 'Project Settings'}</h3>
+      {/* Project Settings Section - Only show when editing */}
+      {project && (
+        <div className="border-t border-gray-200 pt-4 mt-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{isRTL ? 'تنظیمات پروژه' : 'Project Settings'}</h3>
         <div className="grid grid-cols-2 gap-4">
           <div className="flex items-center">
             <input
@@ -702,7 +746,8 @@ function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
             </select>
           </div>
         </div>
-      </div>
+        </div>
+      )}
 
       <div className={`flex items-center ${isRTL ? 'justify-start flex-row-reverse' : 'justify-end'} gap-3 pt-4`}>
         <Button type="button" variant="outline" onClick={onCancel}>
@@ -727,6 +772,25 @@ interface ProjectCardProps {
 }
 
 function ProjectCard({ project, onEdit, onDelete, getStatusBadge, isRTL, t }: ProjectCardProps) {
+  const [showMenu, setShowMenu] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false)
+      }
+    }
+
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showMenu])
+
   const getNatureLabel = (nature: ProjectNature) => {
     const labels = {
       [ProjectNature.DesignAndImplementation]: isRTL ? 'طراحی و پیاده‌سازی' : 'Design & Implementation',
@@ -751,10 +815,39 @@ function ProjectCard({ project, onEdit, onDelete, getStatusBadge, isRTL, t }: Pr
             <p className="text-sm text-gray-600">{project.code}</p>
           </Link>
         </div>
-        <div className="relative">
-          <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+        <div className="relative" ref={menuRef}>
+          <button 
+            onClick={() => setShowMenu(!showMenu)}
+            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+          >
             <MoreVertical className="w-5 h-5" />
           </button>
+          
+          {/* Dropdown Menu */}
+          {showMenu && (
+            <div className={`absolute ${isRTL ? 'left-0' : 'right-0'} top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-50 py-1`}>
+              <button
+                onClick={() => {
+                  setShowMenu(false)
+                  onEdit()
+                }}
+                className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 transition-colors"
+              >
+                <Edit className="w-4 h-4" />
+                {isRTL ? 'ویرایش' : 'Edit'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowMenu(false)
+                  onDelete()
+                }}
+                className="w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                {isRTL ? 'حذف' : 'Delete'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

@@ -68,6 +68,11 @@ public class UpdateResourceCommandHandler : IRequestHandler<UpdateResourceComman
             resource.AssignManager(request.ManagerId.Value);
         }
 
+        if (request.OrganizationId.HasValue || request.OrganizationId == null)
+        {
+            resource.AssignToOrganization(request.OrganizationId);
+        }
+
         await _repository.UpdateAsync(resource, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

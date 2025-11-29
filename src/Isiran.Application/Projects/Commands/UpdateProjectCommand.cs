@@ -16,6 +16,7 @@ public class UpdateProjectCommand : IRequest<Unit>
     public decimal? Budget { get; set; }
     public Guid? ProjectManagerId { get; set; }
     public Guid? OwnerId { get; set; }
+    public Guid? OrganizationId { get; set; }
     public int? SelfReportedProgress { get; set; }
     public int? ApprovedProgress { get; set; }
 }

@@ -16,6 +16,11 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
         _dbSet = context.Set<T>();
     }
 
+    public virtual IQueryable<T> GetQueryable()
+    {
+        return _dbSet.Where(e => !e.IsDeleted);
+    }
+
     public virtual async Task<T?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await _dbSet

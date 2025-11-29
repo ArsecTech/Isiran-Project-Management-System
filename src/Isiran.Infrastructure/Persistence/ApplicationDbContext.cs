@@ -1,5 +1,6 @@
 using Isiran.Domain.Integrations;
 using Isiran.Domain.Notifications;
+using Isiran.Domain.Organizations;
 using Isiran.Domain.Projects;
 using Isiran.Domain.Resources;
 using Isiran.Domain.Tasks;
@@ -29,6 +30,9 @@ public class ApplicationDbContext : DbContext
 
     // Resources
     public DbSet<Resource> Resources => Set<Resource>();
+
+    // Organizations
+    public DbSet<Organization> Organizations => Set<Organization>();
 
     // Users
     public DbSet<User> Users => Set<User>();

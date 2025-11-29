@@ -1,4 +1,5 @@
 using Isiran.Domain.Common;
+using Isiran.Domain.Organizations;
 using Isiran.Domain.Projects;
 using Isiran.Domain.Resources.ValueObjects;
 using Isiran.Domain.Tasks;
@@ -20,12 +21,14 @@ public class Resource : AggregateRoot
     public string? JobTitle { get; private set; }
     public ResourceCalendar Calendar { get; private set; } = null!;
     public Guid? ManagerId { get; private set; }
+    public Guid? OrganizationId { get; private set; }
 
     // Navigation properties
     public virtual Resource? Manager { get; private set; }
     public virtual ICollection<Resource> TeamMembers { get; private set; } = new List<Resource>();
     public virtual ICollection<ProjectResource> Projects { get; private set; } = new List<ProjectResource>();
     public virtual ICollection<TaskResource> Tasks { get; private set; } = new List<TaskResource>();
+    public virtual Organizations.Organization? Organization { get; private set; }
 
     private Resource() { }
 
@@ -95,6 +98,12 @@ public class Resource : AggregateRoot
     public void UpdateCalendar(ResourceCalendar calendar)
     {
         Calendar = calendar;
+        UpdateTimestamp();
+    }
+
+    public void AssignToOrganization(Guid? organizationId)
+    {
+        OrganizationId = organizationId;
         UpdateTimestamp();
     }
 }

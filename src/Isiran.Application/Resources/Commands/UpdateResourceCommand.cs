@@ -17,5 +17,6 @@ public class UpdateResourceCommand : IRequest<Unit>
     public string? Department { get; set; }
     public string? JobTitle { get; set; }
     public Guid? ManagerId { get; set; }
+    public Guid? OrganizationId { get; set; }
 }
 

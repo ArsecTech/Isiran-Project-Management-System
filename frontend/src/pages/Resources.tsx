@@ -57,7 +57,7 @@ export default function Resources() {
       setResources(response.data.items || [])
     } catch (error: any) {
       console.error('Failed to load resources:', error)
-      const errorMessage = error.response?.data?.error || (isRTL ? 'خطا در بارگذاری منابع' : 'Failed to load resources')
+      const errorMessage = error.response?.data?.error || t('resources.loadError')
       showToast(errorMessage, 'error')
       setResources([])
     } finally {
@@ -68,35 +68,35 @@ export default function Resources() {
   const handleCreateResource = async (data: Partial<Resource>) => {
     try {
       await api.post('/resources', data)
-      showToast(isRTL ? 'منبع با موفقیت ایجاد شد' : 'Resource created successfully', 'success')
+      showToast(t('resources.createSuccess'), 'success')
       setShowCreateModal(false)
       loadResources()
     } catch (error) {
-      showToast(isRTL ? 'خطا در ایجاد منبع' : 'Failed to create resource', 'error')
+      showToast(t('resources.createError'), 'error')
     }
   }
 
   const handleUpdateResource = async (id: string, data: Partial<Resource>) => {
     try {
       await api.put(`/resources/${id}`, data)
-      showToast('منبع با موفقیت به‌روزرسانی شد', 'success')
+      showToast(t('resources.updateSuccess'), 'success')
       setSelectedResource(null)
       loadResources()
     } catch (error) {
-      showToast('خطا در به‌روزرسانی منبع', 'error')
+      showToast(t('resources.updateError'), 'error')
     }
   }
 
   const handleDeleteResource = async (id: string) => {
-    if (!confirm('آیا مطمئن هستید که می‌خواهید این منبع را حذف کنید؟')) {
+    if (!confirm(t('resources.deleteConfirm'))) {
       return
     }
     try {
       await api.delete(`/resources/${id}`)
-      showToast('منبع با موفقیت حذف شد', 'success')
+      showToast(t('resources.deleteSuccess'), 'success')
       loadResources()
     } catch (error) {
-      showToast('خطا در حذف منبع', 'error')
+      showToast(t('resources.deleteError'), 'error')
     }
   }
 
@@ -107,7 +107,7 @@ export default function Resources() {
       t('resources.type.equipment'),
       t('resources.type.material')
     ]
-    return types[type] || (isRTL ? 'نامشخص' : 'Unknown')
+    return types[type] || t('resources.unknown')
   }
 
   const getStatusBadge = (status: number) => {
@@ -143,7 +143,7 @@ export default function Resources() {
             {t('resources.title')}
           </h1>
           <p className="text-gray-600 mt-2">
-            {isRTL ? 'مدیریت منابع انسانی و مادی پروژه' : 'Manage human and material project resources'}
+            {t('resources.manageResources')}
           </p>
         </div>
         <Button
@@ -330,7 +330,7 @@ export default function Resources() {
                       <td className="px-6 py-4">{getStatusBadge(resource.status)}</td>
                       <td className="px-6 py-4 text-sm text-gray-600">{resource.email}</td>
                       <td className="px-6 py-4 text-sm text-gray-900 font-medium">
-                        {resource.standardRate != null ? `${formatRialSimple(resource.standardRate, false)} ${isRTL ? '/ساعت' : '/hr'}` : '-'}
+                        {resource.standardRate != null ? `${formatRialSimple(resource.standardRate, false)} ${t('resources.perHour')}` : '-'}
                       </td>
                       <td className="px-6 py-4">
                         <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
@@ -359,7 +359,7 @@ export default function Resources() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredResources.length === 0 ? (
             <div className="col-span-full text-center py-12 text-gray-500">
-              منبعی یافت نشد
+              {t('resources.noResources')}
             </div>
           ) : (
             filteredResources.map((resource) => (
@@ -401,7 +401,7 @@ export default function Resources() {
                   )}
                   <div className="flex items-center text-sm text-gray-600">
                     <DollarSign className="w-4 h-4 mr-2" />
-                    {resource.standardRate != null ? `${formatRialSimple(resource.standardRate, false)}/ساعت` : '-'}
+                    {resource.standardRate != null ? `${formatRialSimple(resource.standardRate, false)}${t('resources.perHour')}` : '-'}
                   </div>
                 </div>
 
@@ -430,7 +430,7 @@ export default function Resources() {
         <Card className="p-12 text-center bg-gradient-to-br from-white to-gray-50/50">
           <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-500 text-lg font-medium">
-            {isRTL ? 'نمای تقویمی به زودی اضافه خواهد شد' : 'Calendar view coming soon'}
+            {t('resources.calendarViewComingSoon')}
           </p>
         </Card>
       )}
@@ -442,7 +442,7 @@ export default function Resources() {
           setShowCreateModal(false)
           setSelectedResource(null)
         }}
-        title={selectedResource ? (isRTL ? 'ویرایش منبع' : 'Edit Resource') : t('resources.create')}
+        title={selectedResource ? t('resources.edit') : t('resources.create')}
         size="lg"
       >
         <ResourceForm
@@ -512,13 +512,13 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
     <form onSubmit={handleSubmit} className="space-y-4" dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="grid grid-cols-2 gap-4">
         <Input
-          label={isRTL ? 'نام' : 'First Name'}
+          label={t('resources.firstName')}
           value={formData.firstName}
           onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
           required
         />
         <Input
-          label={isRTL ? 'نام خانوادگی' : 'Last Name'}
+          label={t('resources.lastName')}
           value={formData.lastName}
           onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
           required
@@ -534,7 +534,7 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
       />
 
       <Input
-        label={isRTL ? 'شماره تماس' : 'Phone Number'}
+        label={t('resources.phoneNumber')}
         type="tel"
         value={formData.phoneNumber}
         onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
@@ -577,7 +577,7 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
 
       <div className="grid grid-cols-2 gap-4">
         <Input
-          label={`${isRTL ? 'حداکثر واحد' : 'Max Units'} (%)`}
+          label={t('resources.maxUnitsPercent')}
           type="number"
           step="0.1"
           min="0"
@@ -586,7 +586,7 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
           onChange={(e) => setFormData({ ...formData, maxUnits: parseFloat(e.target.value) })}
         />
         <Input
-          label={`${t('resources.standardRate')} (${isRTL ? 'ریال/ساعت' : 'Rial/hr'})`}
+          label={`${t('resources.standardRate')} (${t('resources.rialPerHour')})`}
           type="number"
           step="0.01"
           min="0"
@@ -596,7 +596,7 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
       </div>
 
       <Input
-        label={`${t('resources.overtimeRate')} (${isRTL ? 'ریال/ساعت' : 'Rial/hr'})`}
+        label={`${t('resources.overtimeRate')} (${t('resources.rialPerHour')})`}
         type="number"
         step="0.01"
         min="0"
@@ -619,7 +619,7 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          {isRTL ? 'مدیر' : 'Manager'}
+          {t('resources.manager')}
         </label>
         <select
           value={formData.managerId}
@@ -627,7 +627,7 @@ function ResourceForm({ resource, onSubmit, onCancel }: ResourceFormProps) {
           className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
           dir={isRTL ? 'rtl' : 'ltr'}
         >
-          <option value="">{isRTL ? 'اختصاص داده نشده' : 'Not Assigned'}</option>
+          <option value="">{t('resources.notAssigned')}</option>
           {resources.filter(r => r.id !== resource?.id).map((res) => (
             <option key={res.id} value={res.id}>
               {res.fullName}
